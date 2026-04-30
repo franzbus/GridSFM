@@ -20,7 +20,7 @@ separate components, and it is important to keep them straight:
 
  output:                output:                output:                consumes:
  raw topology           .solvable.json         per-grid folder of     .pyg.json via
- JSON (often not        (canonical, cold-     .pyg.json files with    build_hetero_
+ JSON (not always       (canonical, cold-     .pyg.json files with    build_hetero_
  AC-OPF-solvable)       strict solvable)      AC-OPF solution +       data_from_json
                                               duals + perturbation
                                               metadata

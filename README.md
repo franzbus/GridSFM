@@ -33,11 +33,11 @@ A Python utility (`gridsfm_pg_loader.py`) for downloading and loading
 GridSFM US power grid models and OPF results from HuggingFace Hub.
 
 ```bash
-pip install huggingface_hub
+pip install ./power_grid/hf_util
 ```
 
 ```python
-from gridsfm_pg_loader import GridSFM_PG_Loader
+from gridsfm.hf_util import GridSFM_PG_Loader
 
 loader = GridSFM_PG_Loader("microsoft/GridSFM_US_power_grid_[model_date]")
 model  = loader.load_model("texas", hour="16h")

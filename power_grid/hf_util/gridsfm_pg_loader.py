@@ -10,7 +10,7 @@ Install:
     pip install huggingface_hub
 
 Usage:
-    from gridsfm_pg_loader import GridSFM_PG_Loader
+    from gridsfm.hf_util import GridSFM_PG_Loader
 
     # Basic: files stay in HuggingFace cache
     loader = GridSFM_PG_Loader("microsoft/GridSFM_US_power_grid_[model_date]")
@@ -53,6 +53,8 @@ Usage:
     # Download all files to a local directory
     loader.download_all("./data")
 """
+
+from __future__ import annotations
 
 import json
 import shutil
@@ -175,7 +177,7 @@ class GridSFM_PG_Loader:
     def _load_json(self, filename: str) -> dict:
         """Download a JSON file and return its parsed contents."""
         local_path = self._download_file(filename)
-        with open(local_path, "r") as f:
+        with open(local_path, "r", encoding="utf-8") as f:
             return json.load(f)
 
     def _resolve_region(self, region: str) -> str:
@@ -363,6 +365,12 @@ class GridSFM_PG_Loader:
         """
         region = self._resolve_region(region)
         self._validate_hour(hour)
+        valid_file_types = self.file_types
+        if file_type not in valid_file_types:
+            raise ValueError(
+                f"Invalid file_type '{file_type}'. "
+                f"Valid file types: {', '.join(valid_file_types)}"
+            )
         filename = self._make_filename(region, file_type, hour)
         cached_path = hf_hub_download(
             repo_id=self.repo_id,
@@ -428,7 +436,7 @@ class GridSFM_PG_Loader:
         """
         target = Path(dest)
         target.parent.mkdir(parents=True, exist_ok=True)
-        with open(target, "w") as f:
+        with open(target, "w", encoding="utf-8") as f:
             json.dump(data, f)
         return str(target)
 

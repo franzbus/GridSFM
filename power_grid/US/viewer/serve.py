@@ -47,7 +47,10 @@ class Handler(SimpleHTTPRequestHandler):
         # Data files: /data/<hour>/<filename>
         if path.startswith("/data/"):
             rel = path[len("/data/"):]
-            file_path = self.data_dir / rel
+            file_path = (self.data_dir / rel).resolve()
+            if not file_path.is_relative_to(self.data_dir.resolve()):
+                self.send_error(403, "Forbidden")
+                return
             if file_path.is_file() and file_path.suffix == ".json":
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")

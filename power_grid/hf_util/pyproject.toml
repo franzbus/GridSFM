@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "gridsfm-hf-util"
+version = "0.1.0"
+description = "HuggingFace loader for the GridSFM US Power Grid dataset"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = [
+    "huggingface_hub",
+]
+
+[project.urls]
+Repository = "https://github.com/microsoft/GridSFM"
+
+[tool.setuptools.packages.find]
+include = ["gridsfm*"]
+
+[tool.setuptools.package-dir]
+"gridsfm.hf_util" = "."

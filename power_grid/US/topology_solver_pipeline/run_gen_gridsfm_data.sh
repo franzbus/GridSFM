@@ -12,7 +12,7 @@
 #
 # Any argument you pass positionally overrides its default; leave later args
 # unset to keep their defaults.
-set -uo pipefail
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 JULIA_PROJECT="$SCRIPT_DIR"   # self-contained — Project.toml is in this dir

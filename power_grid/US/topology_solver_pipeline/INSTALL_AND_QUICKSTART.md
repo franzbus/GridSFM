@@ -47,7 +47,7 @@ should contain `04h/` and `16h/` subdirectories with `*_model.json` files.
 ## Quick Start
 
 ```bash
-cd solver/topo_solver_pipe
+cd power_grid/US/topology_solver_pipeline
 make help
 ```
 
@@ -328,7 +328,7 @@ If not installed, see [julialang.org/downloads](https://julialang.org/downloads/
 The `Manifest.toml` pins exact versions for Julia 1.11. If you have a different
 Julia version, you may need to resolve:
 ```bash
-cd solver/topo_solver_pipe
+cd power_grid/US/topology_solver_pipeline
 julia --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate()'
 ```
 

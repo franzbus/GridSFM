@@ -6,7 +6,7 @@ state or region.
 
 ## Requirements
 
-Python 3.8+ (stdlib only — no pip packages needed). The front-end uses
+Python 3.10+ (stdlib only — no pip packages needed). The front-end uses
 [Leaflet.js](https://leafletjs.com/) loaded from CDN.
 
 ## Usage

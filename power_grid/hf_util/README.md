@@ -5,14 +5,16 @@ HuggingFace Hub using `gridsfm_pg_loader.py`.
 
 ## Install
 
+From the repository root:
+
 ```bash
-pip install huggingface_hub
+pip install ./power_grid/hf_util
 ```
 
 ## Usage
 
 ```python
-from gridsfm_pg_loader import GridSFM_PG_Loader
+from gridsfm.hf_util import GridSFM_PG_Loader
 
 # Basic: files stay in HuggingFace cache
 loader = GridSFM_PG_Loader("microsoft/GridSFM_US_power_grid_[model_date]")
@@ -54,10 +56,7 @@ print(loader.list_regions())
 # Download all files to a local directory
 loader.download_all("./data")
 ```
-| AC1 | AC1 — Voltage + Q | Voltage [0.90, 1.10], Q limits ×1.5 (AC-OPF only) |
-
-The `relaxation_level` and `relaxation_label` fields in results files indicate which level was needed.
 
 ## License
 
-This data is released under the [MIT License](LICENSE).
+This project is released under the [MIT License](../../LICENSE).
