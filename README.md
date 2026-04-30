@@ -1,7 +1,7 @@
 # GridSFM
 
 GridSFM is an open-source framework for neural surrogate modeling of AC
-Optimal Power Flow (AC-OPF) on real-topology US power grids. It provides
+Optimal Power Flow (AC-OPF) on realistic approximations of the US power grids, derived exclusively from open data. It provides
 tooling to obtain grid data, process raw topologies into solved AC-OPF
 scenarios, and (coming soon) load and run pre-trained surrogate models for
 fast AC-OPF estimation.
@@ -39,7 +39,7 @@ pip install huggingface_hub
 ```python
 from gridsfm_pg_loader import GridSFM_PG_Loader
 
-loader = GridSFM_PG_Loader("YOUR_HF_USERNAME/GridSFM_US_power_grid")
+loader = GridSFM_PG_Loader("microsoft/GridSFM_US_power_grid_[model_date]")
 model  = loader.load_model("texas", hour="16h")
 ```
 
