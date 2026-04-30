@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GridSFM Topology | Data Viewer</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<style>
+  :root {
+    --bg: #0f1117; --surface: #1a1d27; --surface2: #242734;
+    --border: #2e3244; --text: #e4e6ed; --text2: #9399ab;
+    --accent: #4f8ff7; --green: #34d399; --orange: #f97316; --red: #ef4444;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); overflow:hidden; height:100vh; }
+  .header { display:flex; align-items:center; justify-content:space-between; padding:12px 24px; background:var(--surface); border-bottom:1px solid var(--border); height:56px; }
+  .header h1 { font-size:16px; font-weight:600; }
+  .header h1 span { color:var(--accent); }
+  .select-group { display:flex; align-items:center; gap:12px; }
+  .select-label { font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:0.05em; font-weight:600; }
+  .state-select { background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 12px; font-size:13px; cursor:pointer; min-width:200px; }
+  .state-select:focus { outline:2px solid var(--accent); }
+  .main { display:flex; height:calc(100vh - 56px); }
+  .sidebar { width:260px; min-width:260px; background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; }
+  .step-btn { display:flex; align-items:flex-start; gap:12px; padding:14px 16px; border:none; border-left:3px solid transparent; background:transparent; color:var(--text2); cursor:pointer; text-align:left; transition:all 0.15s; font-size:13px; line-height:1.4; }
+  .step-btn:hover { background:var(--surface2); }
+  .step-btn.active { background:var(--surface2); border-left-color:var(--accent); color:var(--text); }
+  .step-num { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:50%; background:var(--border); color:var(--text2); font-size:11px; font-weight:700; flex-shrink:0; }
+  .step-btn.active .step-num { background:var(--accent); color:#fff; }
+  .step-title { font-weight:600; margin-bottom:2px; }
+  .step-desc { font-size:11px; color:var(--text2); }
+  .content { flex:1; display:flex; flex-direction:column; overflow:hidden; position:relative; }
+  .info-bar { background:var(--surface); border-bottom:1px solid var(--border); padding:12px 20px; min-height:60px; overflow-y:auto; }
+  .info-bar.data-view { max-height:none; flex:1 1 0; min-height:0; }
+  .info-bar h2 { font-size:14px; font-weight:600; margin-bottom:4px; color:var(--accent); }
+  .sub-tabs { display:flex; gap:6px; margin:8px 0 10px; flex-wrap:wrap; }
+  .sub-tab { padding:4px 12px; border-radius:12px; font-size:11px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:transparent; color:var(--text2); transition:all 0.15s; }
+  .sub-tab:hover { border-color:var(--accent); color:var(--text); }
+  .sub-tab.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .stats-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:8px; }
+  .stat-card { background:var(--surface2); border-radius:6px; padding:8px 12px; }
+  .stat-label { font-size:10px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text2); margin-bottom:2px; }
+  .stat-value { font-size:18px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .stat-detail { font-size:11px; color:var(--text2); }
+  .map-container { flex:1; position:relative; }
+  #map { width:100%; height:100%; background:#1a1d27; }
+  .loading-overlay { position:absolute; top:0; right:0; bottom:0; left:0; background:rgba(15,17,23,0.85); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:1000; gap:12px; transition:opacity 0.3s; }
+  .loading-overlay.hidden { opacity:0; pointer-events:none; }
+  .spinner { width:32px; height:32px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .loading-text { font-size:13px; color:var(--text2); }
+  .error-banner { background:rgba(248,113,113,0.12); border:1px solid var(--red); border-radius:6px; padding:10px 16px; margin:8px 0; color:var(--red); font-size:13px; }
+  .results-table { width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
+  .results-table th { text-align:left; padding:6px 10px; background:var(--surface2); color:var(--text2); font-size:11px; text-transform:uppercase; letter-spacing:0.04em; border-bottom:1px solid var(--border); }
+  .results-table td { padding:6px 10px; border-bottom:1px solid var(--border); }
+  .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+  .badge-green  { background:rgba(52,211,153,0.15); color:var(--green); }
+  .badge-orange { background:rgba(251,146,60,0.15); color:var(--orange); }
+  .badge-red    { background:rgba(248,113,113,0.15); color:var(--red); }
+  .legend { position:absolute; bottom:20px; right:20px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 14px; z-index:999; font-size:11px; max-width:220px; }
+  .legend-title { font-weight:600; margin-bottom:6px; font-size:12px; }
+  .legend-item { display:flex; align-items:center; gap:6px; margin-bottom:3px; }
+  .legend-color { width:14px; height:3px; border-radius:2px; flex-shrink:0; }
+  .legend-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  ::-webkit-scrollbar { width:6px; }
+  ::-webkit-scrollbar-track { background:var(--surface); }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+  .hour-select { background:var(--surface2); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:4px 10px; font-size:12px; cursor:pointer; margin-left:12px; font-weight:600; }
+  .detail-tabs { display:flex; gap:4px; margin:8px 0 6px; border-bottom:1px solid var(--border); padding-bottom:6px; }
+  .detail-tab { padding:3px 10px; border-radius:4px 4px 0 0; font-size:11px; font-weight:600; cursor:pointer; border:none; background:transparent; color:var(--text2); transition:all 0.15s; }
+  .detail-tab:hover { color:var(--text); background:var(--surface2); }
+  .detail-tab.active { color:var(--accent); border-bottom:2px solid var(--accent); }
+  .detail-panel { display:none; }
+  .detail-panel.active { display:block; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>GridSFM Topology | <span>Data Viewer</span></h1>
+  <div class="select-group">
+    <span class="select-label">Dataset</span>
+    <select class="state-select" id="stateSelect"><option value="">Loading&hellip;</option></select>
+  </div>
+</div>
+<div class="main">
+  <nav class="sidebar" id="sidebar">
+    <button class="step-btn active" data-step="0"><span class="step-num">1</span><div><div class="step-title">Network Model</div><div class="step-desc">Topology, generators &amp; loads</div></div></button>
+    <button class="step-btn" data-step="1"><span class="step-num">2</span><div><div class="step-title">OPF Summary</div><div class="step-desc">DC &amp; AC solver results</div></div></button>
+    <button class="step-btn" data-step="2"><span class="step-num">3</span><div><div class="step-title">Economic Dispatch</div><div class="step-desc">Generator output &amp; fuel mix</div></div></button>
+    <button class="step-btn" data-step="3"><span class="step-num">4</span><div><div class="step-title">Line Congestion</div><div class="step-desc">Branch loading &amp; bottlenecks</div></div></button>
+  </nav>
+  <div class="content">
+    <div class="info-bar" id="infoBar">
+      <h2>Select a dataset to begin</h2>
+      <p style="color:var(--text2)">Pick a US state or region from the dropdown.</p>
+    </div>
+    <div class="map-container" id="mapContainer">
+      <div id="map"></div>
+      <div class="legend" id="legend" style="display:none;"></div>
+    </div>
+    <div class="loading-overlay hidden" id="loading">
+      <div class="spinner"></div>
+      <div class="loading-text" id="loadingText">Loading&hellip;</div>
+    </div>
+  </div>
+</div>
+<script>
+// ======= Globals =======
+var map, layerGroup, currentStep=0, currentState='', renderGeneration=0;
+var dataCache={};
+var savedView={};
+var currentHour='16h';
+var currentOPFMode='dc';
+var availableHours=[];
+
+// Voltage colors
+var KV_COLORS=[[765,'#8B0000'],[500,'#FF0000'],[345,'#FF6600'],[230,'#FFD700'],[161,'#90EE90'],[138,'#32CD32'],[115,'#00CED1'],[69,'#4169E1'],[0,'#D3D3D3']];
+// Fuel colors
+var FUEL_COLORS={Nuclear:'#FF6B6B',Coal:'#4A4A4A',Gas:'#4ECDC4',Oil:'#DDA0DD',Hydro:'#45B7D1',Solar:'#FFEAA7',Wind:'#96CEB4',Biomass:'#8B4513',Geothermal:'#FF8C00',Battery:'#9B59B6',Waste:'#6B8E23',Unknown:'#BDC3C7'};
+var FUEL_ALIASES={natural_gas:'gas',lng:'gas',cng:'gas',combined_cycle:'gas',ccgt:'gas',gas_turbine:'gas',simple_cycle:'gas',combustion_turbine:'gas',ct:'gas',peaker:'gas',ocgt:'gas',steam:'gas',steam_turbine:'gas',hydrogen:'gas',ammonia:'gas',synthetic_gas:'gas',lignite:'coal',hard_coal:'coal',petroleum:'oil',fuel_oil:'oil',heavy_fuel_oil:'oil',diesel:'oil',biogas:'biomass',wood:'biomass',biofuel:'biomass',refuse:'waste',landfill_gas:'waste',waste_heat:'waste',photovoltaic:'solar',pv:'solar',solar_thermal:'solar',onshore_wind:'wind',offshore_wind:'wind',water:'hydro',run_of_river:'hydro',pumped_storage:'hydro',tidal:'hydro',wave:'hydro',storage:'battery',flywheel:'battery',uranium:'nuclear'};
+
+// ======= Utilities =======
+function kvColor(kv){if(kv==null||isNaN(kv)||kv<=0)return'#D3D3D3';for(var i=KV_COLORS.length-1;i>=0;i--){var vc=KV_COLORS[i][0];if(vc===0)continue;if(kv<=vc*1.15)return KV_COLORS[i][1]}return KV_COLORS[0][1]}
+function fuelColor(ft){var f=(ft||'unknown').split(';')[0].toLowerCase().replace(/[ -]/g,'_');var key=FUEL_ALIASES[f]||f;var cap=key.charAt(0).toUpperCase()+key.slice(1);return FUEL_COLORS[cap]||'#BDC3C7'}
+function esc(s){var d=document.createElement('div');d.textContent=String(s==null?'':s);return d.innerHTML}
+function fmt(n){if(n==null||isNaN(n))return'\u2014';return Number(n).toLocaleString('en-US')}
+function fmtM(n){if(n==null||isNaN(n))return'\u2014';return'$'+Number(n).toLocaleString('en-US',{maximumFractionDigits:0})}
+function median(a){if(!a.length)return 0;var s=a.slice().sort(function(x,y){return x-y});var m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2}
+function stateLabel(){return currentState.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase()})}
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
+function stale(gen){return gen!==renderGeneration}
+function hourLabel(){var match=availableHours.find(function(h){return h.value===currentHour});return match?match.label:currentHour}
+function resultsDir(){return'/data/'+currentHour+'/'}
+
+// ======= Batch rendering helpers =======
+function drawBranchesAsGeoJSON(buses,branches,opts){
+  var features=[];
+  Object.entries(branches).forEach(function(e){
+    var bid=e[0],br=e[1];
+    var bf=buses[String(br.f_bus)]||{},bt=buses[String(br.t_bus)]||{};
+    if(bf.lat==null||bt.lat==null)return;
+    if(opts.filter&&!opts.filter(bid,br))return;
+    features.push({type:'Feature',geometry:{type:'LineString',coordinates:[[bf.lon,bf.lat],[bt.lon,bt.lat]]},properties:{_bid:bid,_br:br,_bf:bf,_bt:bt}});
+  });
+  if(!features.length)return;
+  L.geoJSON({type:'FeatureCollection',features:features},{
+    style:function(f){var p=f.properties;return opts.styleFn(p._bid,p._br,p._bf,p._bt)},
+    onEachFeature:opts.tooltipFn?function(f,ly){var p=f.properties;ly.bindTooltip(opts.tooltipFn(p._bid,p._br,p._bf,p._bt),{sticky:true})}:undefined
+  }).addTo(layerGroup);
+}
+function drawDCLinesAsGeoJSON(buses,dclines,opts){
+  if(!dclines||!Object.keys(dclines).length)return;
+  var features=[];
+  Object.entries(dclines).forEach(function(e){
+    var did=e[0],dc=e[1];
+    var bf=buses[String(dc.f_bus)]||{},bt=buses[String(dc.t_bus)]||{};
+    if(bf.lat==null||bt.lat==null)return;
+    features.push({type:'Feature',geometry:{type:'LineString',coordinates:[[bf.lon,bf.lat],[bt.lon,bt.lat]]},properties:{_did:did,_dc:dc,_bf:bf,_bt:bt}});
+  });
+  if(!features.length)return;
+  var defaultStyle={color:'#a855f7',weight:3.5,opacity:0.9};
+  L.geoJSON({type:'FeatureCollection',features:features},{
+    style:opts&&opts.styleFn?function(f){var p=f.properties;return opts.styleFn(p._did,p._dc,p._bf,p._bt)}:function(){return defaultStyle},
+    onEachFeature:function(f,ly){
+      var p=f.properties,dc=p._dc;
+      var tip='<b>HVDC Line '+esc(p._did)+'</b><br>Bus '+dc.f_bus+' \u2194 '+dc.t_bus+'<br>Rating: '+((dc.pmaxf||0).toFixed(0))+' MW';
+      if(dc.length_km)tip+='<br>Length: '+dc.length_km.toFixed(1)+' km';
+      ly.bindTooltip(tip,{sticky:true});
+    }
+  }).addTo(layerGroup);
+}
+function drawBackgroundNetwork(buses,branches,dclines){
+  drawBranchesAsGeoJSON(buses,branches,{
+    styleFn:function(bid,br){return{color:'#555',weight:1.5,opacity:0.4,dashArray:br.transformer?'4 3':null}}
+  });
+  if(dclines)drawDCLinesAsGeoJSON(buses,dclines,{styleFn:function(){return{color:'#a855f7',weight:2.5,opacity:0.5}}});
+}
+function drawBusesAsGeoJSON(buses,opts){
+  var features=[];
+  Object.entries(buses).forEach(function(e){
+    var bid=e[0],bus=e[1];
+    if(bus.lat==null)return;
+    if(opts.filter&&!opts.filter(bid,bus))return;
+    features.push({type:'Feature',geometry:{type:'Point',coordinates:[bus.lon,bus.lat]},properties:{_bid:bid,_bus:bus}});
+  });
+  if(!features.length)return;
+  L.geoJSON({type:'FeatureCollection',features:features},{
+    pointToLayer:function(f,ll){var p=f.properties;return L.circleMarker(ll,opts.pointOpts(p._bid,p._bus))},
+    onEachFeature:opts.tooltipFn?function(f,ly){var p=f.properties;ly.bindTooltip(opts.tooltipFn(p._bid,p._bus),{sticky:true})}:undefined
+  }).addTo(layerGroup);
+}
+function enrichBusNames(dm){
+  if(!dm||dm._busNamesEnriched)return;
+  var dB=dm.bus||{},dG=dm.gen||{};
+  var best={};
+  Object.values(dG).forEach(function(g){
+    var n=g.name||'';if(!n||/^GEN_\d+$/.test(n))return;
+    var bid=String(g.gen_bus||'');
+    if(!best[bid]||(g.pmax||0)>best[bid].pmax)best[bid]={pmax:g.pmax||0,name:n};
+  });
+  Object.keys(dB).forEach(function(bid){
+    var b=dB[bid];if(!b)return;
+    if(/^BUS_\d+$/.test(b.name||'')&&best[bid])b.name=best[bid].name;
+  });
+  dm._busNamesEnriched=true;
+}
+
+// ======= Fetch =======
+function fetchJSON(url,timeoutMs,gen){
+  if(dataCache[url])return Promise.resolve(dataCache[url]);
+  if(!timeoutMs)timeoutMs=120000;
+  var ctrl=new AbortController();
+  var timer=setTimeout(function(){ctrl.abort()},timeoutMs);
+  return fetch(url,{signal:ctrl.signal}).then(function(r){
+    clearTimeout(timer);
+    if(!r.ok)throw new Error('HTTP '+r.status+': '+url.split('/').pop());
+    return r.json();
+  }).then(function(d){
+    clearTimeout(timer);
+    if(gen===undefined||gen===renderGeneration)dataCache[url]=d;
+    return d;
+  }).catch(function(e){
+    clearTimeout(timer);
+    if(e.name==='AbortError')throw new Error('Timeout loading '+url.split('/').pop());
+    throw e;
+  });
+}
+function showLoading(msg){document.getElementById('loadingText').textContent=msg||'Loading\u2026';document.getElementById('loading').classList.remove('hidden')}
+function hideLoading(){document.getElementById('loading').classList.add('hidden')}
+function showError(msg){
+  document.getElementById('infoBar').innerHTML='<h2>Error</h2><div class="error-banner">'+esc(msg)+'</div>';
+  hideLoading();
+}
+
+// ======= Hour dropdown =======
+function hourSelectHTML(){
+  if(availableHours.length<=1)return'';
+  var h='<select class="hour-select" id="hourSelect">';
+  availableHours.forEach(function(hr){
+    h+='<option value="'+esc(hr.value)+'"'+(hr.value===currentHour?' selected':'')+'>'+esc(hr.label)+'</option>';
+  });
+  return h+'</select>';
+}
+// OPF mode toggle
+function opfToggleHTML(hasAC){
+  var dc=currentOPFMode==='dc',ac=currentOPFMode==='ac';
+  var onStyle='font-size:11px;padding:2px 10px;border-radius:4px;font-weight:600;cursor:pointer;border:none;';
+  var offStyle=onStyle+'background:transparent;color:var(--text2);opacity:0.6;';
+  var dcOn=onStyle+'background:#1e3a5f;color:#60a5fa;';
+  var acOn=onStyle+'background:#1a3a2a;color:#4ade80;';
+  var h=' <span style="display:inline-flex;gap:2px;vertical-align:middle;margin-left:8px;background:var(--surface2);border-radius:6px;padding:2px">';
+  h+='<button class="opf-toggle-btn" data-opfmode="dc" style="'+(dc?dcOn:offStyle)+'">DC</button>';
+  h+='<button class="opf-toggle-btn" data-opfmode="ac" style="'+(ac?acOn:offStyle)+(!hasAC?'opacity:0.3;cursor:not-allowed;':'')+'">AC</button>';
+  h+='</span>';
+  return h;
+}
+function detailTabHTML(idx,label,view,active){
+  return '<button class="detail-tab'+(active?' active':'')+'" data-dtab="'+idx+'" data-view="'+view+'">'+esc(label)+'</button>';
+}
+function detailPanelHTML(idx,content,activeIdx){
+  return '<div class="detail-panel'+(idx===(activeIdx||0)?' active':'')+'" data-dpanel="'+idx+'">'+content+'</div>';
+}
+function bindDetailTabs(){
+  document.querySelectorAll('.detail-tab').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var idx=parseInt(this.getAttribute('data-dtab'));
+      var view=this.getAttribute('data-view');
+      document.querySelectorAll('.detail-tab').forEach(function(b){b.classList.remove('active')});
+      document.querySelectorAll('.detail-panel').forEach(function(p){p.classList.remove('active')});
+      this.classList.add('active');
+      var panel=document.querySelector('.detail-panel[data-dpanel="'+idx+'"]');
+      if(panel)panel.classList.add('active');
+      var mapC=document.getElementById('mapContainer'),infoB=document.getElementById('infoBar');
+      if(view==='data'){mapC.style.display='none';infoB.classList.add('data-view')}
+      else if(view==='map'){mapC.style.display='';infoB.classList.remove('data-view');map.invalidateSize({animate:false});
+        setTimeout(function(){map.invalidateSize({animate:false});if(savedView[currentState])map.setView(savedView[currentState].center,savedView[currentState].zoom,{animate:false})},50);
+      }
+    });
+  });
+}
+
+// ======= Data loading =======
+async function fetchModel(gen){
+  return await fetchJSON(resultsDir()+currentState+'_model.json',120000,gen);
+}
+
+// ======= Init =======
+document.addEventListener('DOMContentLoaded',async function(){
+  try{
+    map=L.map('map',{zoomControl:true,preferCanvas:true}).setView([39.8,-98.5],5);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+      attribution:'&copy; OpenStreetMap &copy; CARTO',maxZoom:19
+    }).addTo(map);
+    layerGroup=L.layerGroup().addTo(map);
+  }catch(e){
+    document.getElementById('infoBar').innerHTML='<h2>Map failed to load</h2><div class="error-banner">Check internet connection.</div>';
+    return;
+  }
+  try{
+    var res=await fetch('/api/states');var datasets=await res.json();
+    var sel=document.getElementById('stateSelect');
+    sel.innerHTML='<option value="">— select —</option>';
+    var states=[],regions=[];
+    datasets.forEach(function(d){if(d.is_region)regions.push(d);else states.push(d)});
+    if(states.length){
+      var og=document.createElement('optgroup');og.label='States';
+      states.forEach(function(d){var o=document.createElement('option');o.value=d.id;o.textContent=d.label;og.appendChild(o)});
+      sel.appendChild(og);
+    }
+    if(regions.length){
+      var og=document.createElement('optgroup');og.label='Multi-State Regions';
+      regions.forEach(function(d){var o=document.createElement('option');o.value=d.id;o.textContent=d.label;og.appendChild(o)});
+      sel.appendChild(og);
+    }
+    sel.addEventListener('change',function(){
+      currentState=sel.value;delete savedView[currentState];
+      Object.keys(dataCache).forEach(function(k){delete dataCache[k]});
+      renderStep();
+    });
+
+    // Discover available hours
+    var hres=await fetch('/api/hours');availableHours=await hres.json();
+    if(!availableHours.find(function(h){return h.value===currentHour})&&availableHours.length)currentHour=availableHours[0].value;
+  }catch(e){showError('Failed to load datasets: '+e.message);return}
+
+  document.querySelectorAll('.step-btn').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var step=parseInt(btn.dataset.step);
+      if(step===currentStep)return;
+      delete savedView[currentState];currentStep=step;
+      document.querySelectorAll('.step-btn').forEach(function(b,i){b.classList.toggle('active',i===currentStep)});
+      renderStep();
+    });
+  });
+  document.getElementById('infoBar').addEventListener('click',function(e){
+    var btn=e.target.closest('.opf-toggle-btn');
+    if(btn){var mode=btn.dataset.opfmode;if(mode!==currentOPFMode){currentOPFMode=mode;renderStep()}}
+  });
+  document.getElementById('infoBar').addEventListener('change',function(e){
+    if(e.target.id!=='hourSelect'){return}
+    currentHour=e.target.value;
+    Object.keys(dataCache).forEach(function(k){delete dataCache[k]});
+    renderStep();
+  });
+});
+
+// ======= Zoom helpers =======
+function restoreOrFitBuses(buses){
+  map.invalidateSize({animate:false});
+  if(savedView[currentState]){map.setView(savedView[currentState].center,savedView[currentState].zoom,{animate:false});return}
+  var minLat=90,maxLat=-90,minLon=180,maxLon=-180,found=false;
+  Object.values(buses).forEach(function(v){if(v.lat!=null){if(v.lat<minLat)minLat=v.lat;if(v.lat>maxLat)maxLat=v.lat;if(v.lon<minLon)minLon=v.lon;if(v.lon>maxLon)maxLon=v.lon;found=true}});
+  if(found)map.fitBounds([[minLat,minLon],[maxLat,maxLon]],{padding:[30,30]});
+}
+
+// ======= Step dispatcher =======
+var RENDERERS=[renderNetwork,renderSummary,renderFlows,renderCongestion];
+async function renderStep(){
+  if(!currentState)return;
+  renderGeneration++;var gen=renderGeneration;
+  showLoading('Loading data\u2026');
+  layerGroup.clearLayers();
+  document.getElementById('legend').style.display='none';
+  var mapC=document.getElementById('mapContainer'),infoB=document.getElementById('infoBar');
+  var hideMap=(currentStep===1);
+  if(hideMap){mapC.style.display='none';infoB.classList.add('data-view')}
+  else{mapC.style.display='';infoB.classList.remove('data-view');map.invalidateSize({animate:false});await sleep(100);map.invalidateSize({animate:false})}
+  try{await RENDERERS[currentStep](gen)}catch(e){if(!stale(gen)){console.error(e);showError(e.message)}}
+  if(!stale(gen))hideLoading();
+}
+
+// ================================================================
+//  STEP 1: Network Model (topology + generators + loads)
+// ================================================================
+async function renderNetwork(gen){
+  showLoading('Loading model\u2026');
+  var dm=await fetchModel(gen);
+  if(stale(gen))return;
+  var dB=dm.bus||{},dBr=dm.branch||{},dG=dm.gen||{},dL=dm.load||{},dDC=dm.dcline||{},dSh=dm.shunt||{};
+  var sc=(dm.per_unit===true)?(dm.baseMVA||100):1;
+
+  // Compute stats
+  var totL=0;Object.values(dL).forEach(function(l){totL+=(l.pd||0)});totL*=sc;
+  var totP=0,nGen=0;
+  Object.values(dG).forEach(function(g){if((g.gen_status||1)===1){totP+=(g.pmax||0);nGen++}});totP*=sc;
+  var nXfmr=0;Object.values(dBr).forEach(function(br){if(br.transformer)nXfmr++});
+  var nLine=Object.keys(dBr).length-nXfmr;
+  var bLoad={};Object.values(dL).forEach(function(l){var b=String(l.load_bus||'');bLoad[b]=(bLoad[b]||0)+(l.pd||0)*sc});
+  var maxL=1;Object.values(bLoad).forEach(function(v){if(v>maxL)maxL=v});
+
+  // Fuel mix
+  var fuelTotals={};Object.values(dG).forEach(function(g){
+    if((g.gen_status||1)!==1)return;
+    var f=(g.fuel_type||'unknown').split(';')[0];
+    fuelTotals[f]=(fuelTotals[f]||0)+(g.pmax||0)*sc;
+  });
+  var fuelSorted=Object.entries(fuelTotals).sort(function(a,b){return b[1]-a[1]});
+  var fuelHTML=fuelSorted.map(function(e){return'<span style="color:'+fuelColor(e[0])+'">'+esc(e[0])+'</span>: '+fmt(Math.round(e[1]))+' MW'}).join(' · ');
+
+  document.getElementById('infoBar').innerHTML=
+    '<h2>Network Model \u00b7 '+stateLabel()+' ('+hourLabel()+')'+hourSelectHTML()+'</h2>'+
+    '<div class="stats-grid">'+
+      '<div class="stat-card"><div class="stat-label">Buses</div><div class="stat-value">'+fmt(Object.keys(dB).length)+'</div></div>'+
+      '<div class="stat-card"><div class="stat-label">Lines</div><div class="stat-value">'+fmt(nLine)+'</div></div>'+
+      '<div class="stat-card"><div class="stat-label">Transformers</div><div class="stat-value">'+fmt(nXfmr)+'</div></div>'+
+      '<div class="stat-card"><div class="stat-label">Generators</div><div class="stat-value">'+fmt(nGen)+'</div></div>'+
+      '<div class="stat-card"><div class="stat-label">HVDC Lines</div><div class="stat-value">'+fmt(Object.keys(dDC).length)+'</div></div>'+
+      '<div class="stat-card"><div class="stat-label">Shunts</div><div class="stat-value">'+fmt(Object.keys(dSh).length)+'</div></div>'+
+      '<div class="stat-card"><div class="stat-label">Total Load</div><div class="stat-value">'+fmt(Math.round(totL))+' MW</div></div>'+
+      '<div class="stat-card"><div class="stat-label">Total Capacity</div><div class="stat-value" style="color:#FF5722">'+fmt(Math.round(totP))+' MW</div></div>'+
+    '</div>'+
+    '<p style="margin-top:6px;color:var(--text2);font-size:12px">Fuel mix: '+fuelHTML+'</p>';
+
+  showLoading('Rendering map\u2026');await sleep(10);if(stale(gen))return;
+
+  // Draw branches colored by voltage
+  drawBranchesAsGeoJSON(dB,dBr,{
+    styleFn:function(bid,br,bf){return{color:kvColor(bf._bus?bf._bus.base_kv:((dB[String(br.f_bus)]||{}).base_kv||0)),weight:br.transformer?2:1.8,opacity:0.7,dashArray:br.transformer?'4 3':null}},
+    tooltipFn:function(bid,br){
+      var fb=dB[String(br.f_bus)]||{},tb=dB[String(br.t_bus)]||{};
+      return'<b>Branch '+esc(bid)+'</b><br>'+esc(fb.name||'Bus '+br.f_bus)+' \u2194 '+esc(tb.name||'Bus '+br.t_bus)+'<br>'+(fb.base_kv||0).toFixed(0)+' kV'+(br.transformer?' (transformer)':'')+'<br>Rating: '+((br.rate_a||0)*sc).toFixed(0)+' MVA'+(br.length_km?'<br>'+br.length_km.toFixed(1)+' km':'');
+    }
+  });
+  drawDCLinesAsGeoJSON(dB,dDC);
+  if(stale(gen))return;
+
+  // Draw buses sized by load
+  drawBusesAsGeoJSON(dB,{
+    pointOpts:function(bid){var lmw=bLoad[bid]||0;return{radius:lmw>0?3+10*(lmw/maxL):2.5,color:lmw>0?'#FF5722':'#94a3b8',fill:true,fillColor:lmw>0?'#FF5722':'#cbd5e1',fillOpacity:lmw>0?0.6:0.4,weight:1}},
+    tooltipFn:function(bid,bus){var lmw=bLoad[bid]||0;return'<b>Bus '+esc(bid)+': '+esc(bus.name||'?')+'</b><br>'+((bus.base_kv||0).toFixed(0))+' kV<br>Load: '+lmw.toFixed(1)+' MW'}
+  });
+  if(stale(gen))return;
+
+  // Draw generators
+  Object.values(dG).forEach(function(gn){
+    var gbus=dB[String(gn.gen_bus)]||{};if(gbus.lat==null)return;
+    var fuel=(gn.fuel_type||'unknown').split(';')[0];
+    var pmw=(gn.pmax||0)*sc;
+    L.circleMarker([gbus.lat,gbus.lon],{radius:6,color:fuelColor(fuel),fill:true,fillColor:fuelColor(fuel),fillOpacity:0.8,weight:2})
+    .bindTooltip('<b>'+esc(gn.name||fuel+' Gen')+'</b><br>Fuel: '+esc(fuel)+'<br>Pmax: '+pmw.toFixed(0)+' MW',{sticky:true}).addTo(layerGroup);
+  });
+  restoreOrFitBuses(dB);
+  savedView[currentState]={center:map.getCenter(),zoom:map.getZoom()};
+
+  var el=document.getElementById('legend');
+  el.innerHTML='<div class="legend-title">Voltage</div>'+KV_COLORS.map(function(e){return'<div class="legend-item"><span class="legend-color" style="background:'+e[1]+'"></span>'+(e[0]>0?e[0]+' kV':'Other')+'</div>'}).join('')+
+    '<div class="legend-title" style="margin-top:6px">Generator Fuel</div>'+fuelSorted.slice(0,8).map(function(e){return'<div class="legend-item"><span class="legend-dot" style="background:'+fuelColor(e[0])+'"></span>'+e[0]+'</div>'}).join('')+
+    '<div style="margin-top:4px" class="legend-title">Bus Load</div><div class="legend-item"><span class="legend-dot" style="background:#FF5722"></span>Loaded (&prop; MW)</div><div class="legend-item"><span class="legend-dot" style="background:#cbd5e1"></span>No load</div>';
+  el.style.display='block';
+  hideLoading();
+}
+
+// ================================================================
+//  STEP 2: OPF Summary (results table — no map)
+// ================================================================
+async function renderSummary(gen){
+  showLoading('Loading solver results\u2026');
+  var dm=await fetchModel(gen);
+  if(stale(gen))return;
+  var sc=(dm.per_unit===true)?(dm.baseMVA||100):1;
+  var totLModel=0;Object.values(dm.load||{}).forEach(function(l){totLModel+=(l.pd||0)});totLModel*=sc;
+
+  var hourResults={};
+  var fetches=[];
+  availableHours.forEach(function(hr){
+    fetches.push(
+      fetchJSON('/data/'+hr.value+'/'+currentState+'_dc_results.json',60000,gen).catch(function(){return null}).then(function(r){hourResults[hr.value+'_dc']=r}),
+      fetchJSON('/data/'+hr.value+'/'+currentState+'_ac_results.json',60000,gen).catch(function(){return null}).then(function(r){hourResults[hr.value+'_ac']=r})
+    );
+  });
+  await Promise.all(fetches);
+  if(stale(gen))return;
+
+  function badge(st){if(st==='LOCALLY_SOLVED'||st==='OPTIMAL')return'<span class="badge badge-green">&#10003; SOLVED</span>';if(st==='ALMOST_LOCALLY_SOLVED')return'<span class="badge badge-orange">&asymp; APPROX</span>';return'<span class="badge badge-red">&#10007; '+esc(st)+'</span>'}
+  function lvl(l){return l===6?'AC1':'L'+l}
+
+  var rows='';
+  availableHours.forEach(function(hr){
+    [['DC',hourResults[hr.value+'_dc']],['AC',hourResults[hr.value+'_ac']]].forEach(function(p){
+      var f=p[0],r=p[1];if(!r)return;
+      var cost=r.objective||0;var rLoad=r.total_load_mw||totLModel;var mwh=rLoad>0?cost/rLoad:0;
+      rows+='<tr><td>'+esc(hr.label)+'</td><td><b>'+f+'</b></td><td>'+badge(r.termination_status||'')+'</td><td>'+lvl(r.relaxation_level!=null?r.relaxation_level:-1)+'</td><td>'+fmtM(cost)+'</td><td>'+fmtM(mwh)+'</td><td>'+fmt(Math.round(r.total_gen_mw||0))+' MW</td><td>'+fmt(Math.round(r.total_load_mw||0))+' MW</td><td>'+((r.solve_time||0).toFixed(1))+'s</td></tr>';
+    });
+  });
+
+  var selDC=hourResults[currentHour+'_dc'],selAC=hourResults[currentHour+'_ac'];
+  var extra='';
+  if(selDC&&selAC&&selDC.objective>0){var p=(selAC.objective-selDC.objective)/selDC.objective*100;extra='<p style="margin-top:10px;color:var(--text2)">AC premium over DC ('+hourLabel()+'): <b>'+(p>=0?'+':'')+p.toFixed(1)+'%</b></p>'}
+
+  document.getElementById('infoBar').innerHTML=
+    '<h2>OPF Summary \u00b7 '+stateLabel()+'</h2>'+
+    '<table class="results-table"><tr><th>Hour</th><th>OPF</th><th>Status</th><th>Level</th><th>Cost ($/hr)</th><th>$/MWh</th><th>Generation</th><th>Load</th><th>Time</th></tr>'+rows+'</table>'+extra+
+    '<p style="margin-top:10px;color:var(--text2);font-size:12px">DC-OPF is a fast linear approximation; AC-OPF adds voltage and reactive-power physics. L0 = strict constraints, L5 = most relaxed.</p>';
+  document.getElementById('legend').style.display='none';
+  hideLoading();
+}
+
+// ================================================================
+//  STEP 3: Economic Dispatch (generator output + fuel mix)
+// ================================================================
+async function renderFlows(gen){
+  showLoading('Loading dispatch data\u2026');
+  var results=await Promise.all([
+    fetchModel(gen),
+    fetchJSON(resultsDir()+currentState+'_dc_results.json',60000,gen).catch(function(){return null}),
+    fetchJSON(resultsDir()+currentState+'_ac_results.json',60000,gen).catch(function(){return null})
+  ]);
+  if(stale(gen))return;
+  var dm=results[0],dcSol=results[1],acSol=results[2];
+  enrichBusNames(dm);
+  var hasAC=!!(acSol&&acSol.solution);
+  var sol=(currentOPFMode==='ac'&&hasAC)?acSol:dcSol;
+  if(!sol||!sol.solution){
+    document.getElementById('infoBar').innerHTML='<h2>Economic Dispatch \u00b7 '+stateLabel()+' ('+hourLabel()+')'+hourSelectHTML()+opfToggleHTML(hasAC)+'</h2><div class="error-banner">No results available.</div>';return;
+  }
+
+  var sc=(dm.per_unit===true)?(dm.baseMVA||100):1;
+  var dB=dm.bus||{},dBr=dm.branch||{},dG=dm.gen||{},dDC=dm.dcline||{};
+  var sGen=sol.solution.gen||{};
+  var genDisp=[],fuelTotals={},totGen=0;
+  Object.entries(sGen).forEach(function(e){
+    var pg=(e[1].pg||0)*sc;if(pg<0.01)return;totGen+=pg;
+    var orig=dG[e[0]]||{};var fuelStr=(orig.fuel_type||'unknown').split(';')[0];
+    fuelTotals[fuelStr]=(fuelTotals[fuelStr]||0)+pg;
+    genDisp.push({id:e[0],pg:pg,pmax:(orig.pmax||0)*sc,fuel:fuelStr,name:orig.name||fuelStr+' Gen',bus:orig.gen_bus,injected:!!orig.eia_injected});
+  });
+  var totLoad=sol.total_load_mw||0;
+  if(!totLoad)Object.values(dm.load||{}).forEach(function(l){totLoad+=(l.pd||0)*sc});
+  var fuelSorted=Object.entries(fuelTotals).sort(function(a,b){return b[1]-a[1]});
+
+  // Fuel bar
+  var barHTML='<div style="display:flex;height:18px;border-radius:4px;overflow:hidden;border:1px solid var(--border)">';
+  fuelSorted.forEach(function(fs){var pct=totGen>0?fs[1]/totGen*100:0;barHTML+='<div style="width:'+pct+'%;background:'+fuelColor(fs[0])+'" title="'+esc(fs[0])+': '+fs[1].toFixed(0)+' MW ('+pct.toFixed(1)+'%)"></div>'});
+  barHTML+='</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;font-size:11px">';
+  fuelSorted.forEach(function(fs){barHTML+='<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+fuelColor(fs[0])+';vertical-align:middle;margin-right:3px"></span>'+esc(fs[0])+' '+fs[1].toFixed(0)+' MW ('+(totGen>0?(fs[1]/totGen*100).toFixed(1):0)+'%)</span>'});
+  barHTML+='</div>';
+
+  // Load bus map for coloring
+  var busLoad={};Object.values(dm.load||{}).forEach(function(l){var b=String(l.load_bus||'');busLoad[b]=(busLoad[b]||0)+(l.pd||0)*sc});
+
+  document.getElementById('infoBar').innerHTML=
+    '<h2>Economic Dispatch \u00b7 '+stateLabel()+' ('+hourLabel()+')'+hourSelectHTML()+opfToggleHTML(hasAC)+'</h2>'+
+    '<div class="stats-grid">'+
+      '<div class="stat-card"><div class="stat-label">Total Generation</div><div class="stat-value">'+fmt(Math.round(totGen))+' MW</div></div>'+
+      '<div class="stat-card"><div class="stat-label">Total Load</div><div class="stat-value">'+fmt(Math.round(totLoad))+' MW</div></div>'+
+      '<div class="stat-card"><div class="stat-label">System Losses</div><div class="stat-value">'+(totLoad>0?((totGen-totLoad)/totLoad*100).toFixed(1):'0')+'%</div></div>'+
+      '<div class="stat-card"><div class="stat-label">Dispatched Gens</div><div class="stat-value">'+genDisp.length+'</div></div>'+
+    '</div>'+
+    '<div style="margin:10px 0">'+barHTML+'</div>';
+
+  showLoading('Rendering map\u2026');await sleep(10);if(stale(gen))return;
+
+  // Draw branches with flow direction
+  var sBr=sol.solution.branch||{};
+  drawBranchesAsGeoJSON(dB,dBr,{
+    styleFn:function(bid,br){
+      var flow=sBr[bid];var pf=flow?Math.abs(flow.pf||0)*sc:0;
+      return{color:pf>50?'#f97316':pf>10?'#facc15':'#555',weight:pf>50?2.5:1.5,opacity:pf>10?0.8:0.4};
+    },
+    tooltipFn:function(bid,br){
+      var fb=dB[String(br.f_bus)]||{},tb=dB[String(br.t_bus)]||{};
+      var flow=sBr[bid];var pf=flow?(flow.pf||0)*sc:0;
+      return'<b>Branch '+esc(bid)+'</b><br>'+esc(fb.name||'')+' \u2192 '+esc(tb.name||'')+'<br>Flow: '+pf.toFixed(1)+' MW<br>Rating: '+((br.rate_a||0)*sc).toFixed(0)+' MVA';
+    }
+  });
+  drawDCLinesAsGeoJSON(dB,dDC);
+  if(stale(gen))return;
+
+  // Load buses (small dots)
+  drawBusesAsGeoJSON(dB,{
+    filter:function(bid){return(busLoad[bid]||0)>0},
+    pointOpts:function(){return{radius:2,color:'#94a3b8',fill:true,fillColor:'#cbd5e1',fillOpacity:0.5,weight:1}}
+  });
+
+  // Generator markers sized by dispatch
+  var maxPg=1;genDisp.forEach(function(g){if(g.pg>maxPg)maxPg=g.pg});
+  genDisp.forEach(function(g){
+    var gbus=dB[String(g.bus)]||{};if(gbus.lat==null)return;
+    var r=6+14*Math.sqrt(g.pg/maxPg);
+    var util=g.pmax>0?(g.pg/g.pmax*100):0;
+    L.circleMarker([gbus.lat,gbus.lon],{radius:r,color:fuelColor(g.fuel),fill:true,fillColor:fuelColor(g.fuel),fillOpacity:0.85,weight:2})
+    .bindTooltip('<b>'+esc(g.name)+'</b><br>Dispatch: '+g.pg.toFixed(1)+' / '+g.pmax.toFixed(0)+' MW ('+util.toFixed(0)+'%)<br>Fuel: '+esc(g.fuel),{sticky:true}).addTo(layerGroup);
+  });
+  restoreOrFitBuses(dB);
+  savedView[currentState]={center:map.getCenter(),zoom:map.getZoom()};
+
+  var el=document.getElementById('legend');
+  el.innerHTML='<div class="legend-title">Fuel Type</div>'+fuelSorted.map(function(fs){return'<div class="legend-item"><span class="legend-color" style="background:'+fuelColor(fs[0])+'"></span>'+esc(fs[0])+'</div>'}).join('')+
+    (Object.keys(dDC).length?'<div class="legend-item" style="margin-top:4px"><span class="legend-color" style="background:#a855f7;height:4px"></span>HVDC</div>':'')+
+    '<div style="margin-top:6px;font-size:10px;color:var(--text2)">Circle size &prop; dispatch MW</div>';
+  el.style.display='block';
+  hideLoading();
+}
+
+// ================================================================
+//  STEP 4: Line Congestion
+// ================================================================
+function congColor(ratio){
+  if(ratio>=1.0)return'#991b1b';if(ratio>=0.9)return'#ef4444';if(ratio>=0.7)return'#db2777';
+  if(ratio>=0.5)return'#f97316';if(ratio>=0.2)return'#facc15';return'#555';
+}
+async function renderCongestion(gen){
+  showLoading('Computing congestion\u2026');
+  var results=await Promise.all([
+    fetchModel(gen),
+    fetchJSON(resultsDir()+currentState+'_dc_results.json',60000,gen).catch(function(){return null}),
+    fetchJSON(resultsDir()+currentState+'_ac_results.json',60000,gen).catch(function(){return null})
+  ]);
+  if(stale(gen))return;
+  var dm=results[0],dcSol=results[1],acSol=results[2];
+  enrichBusNames(dm);
+  var hasAC=!!(acSol&&acSol.solution);
+  var sol=(currentOPFMode==='ac'&&hasAC)?acSol:dcSol;
+  var isAC=sol===acSol;
+  if(!sol||!sol.solution){
+    document.getElementById('infoBar').innerHTML='<h2>Line Congestion \u00b7 '+stateLabel()+' ('+hourLabel()+')'+hourSelectHTML()+opfToggleHTML(hasAC)+'</h2><div class="error-banner">No results available.</div>';return;
+  }
+
+  var sc=(dm.per_unit===true)?(dm.baseMVA||100):1;
+  var dB=dm.bus||{},dBr=dm.branch||{},dDC=dm.dcline||{};
+  var sBr=sol.solution.branch||{};
+
+  var congestion=[];
+  Object.keys(sBr).forEach(function(bid){
+    var flow=sBr[bid],model=dBr[bid];if(!model)return;
+    var pf=flow.pf||0,qf=flow.qf||0;
+    var sf=isAC?Math.sqrt(pf*pf+qf*qf):Math.abs(pf);
+    var rateA=model.rate_a||0;if(rateA<=0)return;
+    var ratio=sf/rateA;
+    var fBus=dB[String(model.f_bus)]||{},tBus=dB[String(model.t_bus)]||{};
+    congestion.push({bid:bid,ratio:ratio,flowMVA:sf*sc,ratingMVA:rateA*sc,
+      fName:fBus.name||'Bus '+model.f_bus,tName:tBus.name||'Bus '+model.t_bus,
+      kv:fBus.base_kv||0,isXfmr:!!model.transformer});
+  });
+  congestion.sort(function(a,b){return b.ratio-a.ratio});
+
+  var ratios=congestion.map(function(c){return c.ratio});
+  var maxR=ratios.length?ratios[0]:0;
+  var medR=median(ratios);
+  var overloaded=ratios.filter(function(r){return r>=1.0}).length;
+  var gt90=ratios.filter(function(r){return r>0.9}).length;
+  var gt50=ratios.filter(function(r){return r>0.5}).length;
+
+  var topRows='';
+  congestion.slice(0,15).forEach(function(c){
+    topRows+='<tr><td>'+esc(c.bid)+'</td><td>'+esc(c.fName)+'</td><td>'+esc(c.tName)+'</td>'+
+      '<td style="text-align:right">'+c.flowMVA.toFixed(0)+'</td>'+
+      '<td style="text-align:right">'+c.ratingMVA.toFixed(0)+'</td>'+
+      '<td style="text-align:right;color:'+congColor(c.ratio)+';font-weight:600">'+(c.ratio*100).toFixed(1)+'%</td>'+
+      '<td style="text-align:right;color:var(--text2)">'+(c.kv>0?c.kv.toFixed(0)+' kV':'')+(c.isXfmr?' xfmr':'')+'</td></tr>';
+  });
+
+  var statsGrid='<div class="stats-grid">'+
+    '<div class="stat-card"><div class="stat-label">Branches</div><div class="stat-value">'+fmt(congestion.length)+'</div></div>'+
+    '<div class="stat-card"><div class="stat-label">Median Loading</div><div class="stat-value">'+(medR*100).toFixed(1)+'%</div></div>'+
+    '<div class="stat-card"><div class="stat-label">Max Loading</div><div class="stat-value" style="color:'+congColor(maxR)+'">'+(maxR*100).toFixed(1)+'%</div></div>'+
+    '<div class="stat-card"><div class="stat-label">&gt;50% Loaded</div><div class="stat-value" style="color:var(--orange)">'+gt50+'</div></div>'+
+    '<div class="stat-card"><div class="stat-label">&gt;90% Loaded</div><div class="stat-value" style="color:var(--red)">'+gt90+'</div></div>'+
+    '<div class="stat-card"><div class="stat-label">Overloaded</div><div class="stat-value" style="color:#991b1b">'+overloaded+'</div></div>'+
+  '</div>';
+
+  var mapContent=statsGrid;
+  var dataContent=statsGrid+
+    '<div style="font-size:11px;font-weight:600;margin:10px 0 4px">Top Congested Lines</div>'+
+    '<table class="results-table" style="font-size:11px"><tr><th>Branch</th><th>From</th><th>To</th><th style="text-align:right">Flow</th><th style="text-align:right">Rating</th><th style="text-align:right">Loading</th><th>Info</th></tr>'+topRows+'</table>';
+
+  document.getElementById('infoBar').innerHTML=
+    '<h2>Line Congestion \u00b7 '+stateLabel()+' ('+hourLabel()+')'+hourSelectHTML()+opfToggleHTML(hasAC)+'</h2>'+
+    '<div class="detail-tabs">'+detailTabHTML(0,'Map','map',true)+detailTabHTML(1,'Data','data',false)+'</div>'+
+    detailPanelHTML(0,mapContent,0)+detailPanelHTML(1,dataContent,0);
+  bindDetailTabs();
+
+  showLoading('Rendering map\u2026');await sleep(10);if(stale(gen))return;
+
+  var congMap={};congestion.forEach(function(c){congMap[c.bid]=c});
+  var sDCsol=sol.solution.dcline||{};
+
+  drawBranchesAsGeoJSON(dB,dBr,{
+    styleFn:function(bid){var c=congMap[bid];var r=c?c.ratio:0;return{color:congColor(r),weight:r>=0.2?3:1.5,opacity:r>=0.2?0.9:0.3}},
+    tooltipFn:function(bid,br){
+      var c=congMap[bid];if(!c)return'<b>Branch '+esc(bid)+'</b>';
+      var unit=isAC?'MVA':'MW';
+      return'<b>Branch '+esc(bid)+'</b><br>'+esc(c.fName)+' \u2194 '+esc(c.tName)+'<br>Flow: '+c.flowMVA.toFixed(1)+' '+unit+'<br>Rating: '+c.ratingMVA.toFixed(0)+' '+unit+'<br><b>Loading: '+(c.ratio*100).toFixed(1)+'%</b>';
+    }
+  });
+  if(dDC)drawDCLinesAsGeoJSON(dB,dDC,{styleFn:function(){return{color:'#a855f7',weight:3.5,opacity:0.9}}});
+  if(stale(gen))return;
+
+  drawBusesAsGeoJSON(dB,{
+    pointOpts:function(){return{radius:1.5,color:'#94a3b8',fill:true,fillColor:'#cbd5e1',fillOpacity:0.3,weight:0.5}}
+  });
+  restoreOrFitBuses(dB);
+  savedView[currentState]={center:map.getCenter(),zoom:map.getZoom()};
+
+  var el=document.getElementById('legend');
+  el.innerHTML='<div class="legend-title">Line Loading</div>'+
+    '<div class="legend-item"><span class="legend-color" style="background:#991b1b;height:6px"></span>&ge;100%</div>'+
+    '<div class="legend-item"><span class="legend-color" style="background:#ef4444;height:5px"></span>90\u201399%</div>'+
+    '<div class="legend-item"><span class="legend-color" style="background:#db2777;height:4px"></span>70\u201389%</div>'+
+    '<div class="legend-item"><span class="legend-color" style="background:#f97316;height:3px"></span>50\u201369%</div>'+
+    '<div class="legend-item"><span class="legend-color" style="background:#facc15;height:2px"></span>20\u201349%</div>'+
+    '<div class="legend-item"><span class="legend-color" style="background:#555;height:1px"></span>&lt;20%</div>'+
+    (Object.keys(dDC).length?'<div class="legend-item" style="margin-top:4px"><span class="legend-color" style="background:#a855f7;height:4px"></span>HVDC</div>':'')+
+    '<div style="margin-top:6px;font-size:10px;color:var(--text2)">'+(isAC?'AC':'DC')+' formulation</div>';
+  el.style.display='block';
+  hideLoading();
+}
+
+// ======= Map helpers =======
+function fitBuses(buses){
+  var minLat=90,maxLat=-90,minLon=180,maxLon=-180,found=false;
+  Object.values(buses).forEach(function(v){if(v.lat!=null){if(v.lat<minLat)minLat=v.lat;if(v.lat>maxLat)maxLat=v.lat;if(v.lon<minLon)minLon=v.lon;if(v.lon>maxLon)maxLon=v.lon;found=true}});
+  if(found)map.fitBounds([[minLat,minLon],[maxLat,maxLon]],{padding:[30,30]});
+}
+</script>
+</body>
+</html>
