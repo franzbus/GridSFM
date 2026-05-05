@@ -1,255 +1,355 @@
-# GridSFM data pipeline — from raw topology to solved scenarios
+# topology_solver_pipeline
 
-## ⚡ Start here → [Install & Quickstart guide](INSTALL_AND_QUICKSTART.md)
+Pipeline for converting raw power grid topology JSONs into OPF-solved GridSFM
+scenarios. The Makefile commands below are convenience wrappers around the
+Julia scripts documented in [PIPELINE_DETAILS.md](PIPELINE_DETAILS.md),
+which describes each file, the four pipeline stages, and the data formats
+in detail.
 
-Before reading further, follow the **[Install & Quickstart guide](INSTALL_AND_QUICKSTART.md)** to set up your environment, download the dataset from HuggingFace, and run the pipeline end-to-end with a single command (Docker or local).
+Supports two execution modes:
 
----
+- **Docker** — self-contained image with Julia 1.11, PowerModels.jl, Ipopt, and
+  all dependencies pre-installed. No host setup required beyond Docker.
+- **Local** — run directly on your machine with a native Julia installation.
+  Faster iteration, no container overhead.
 
-The rest of this README provides detailed documentation of each file in the
-package, the four pipeline stages, and the data formats they produce.
+Both modes use the same Makefile. Docker targets have no prefix; local targets
+are prefixed with `local-`.
 
-The full pipeline that turns a raw grid topology into GridSFM-capable
-`.pyg.json` input files has **four distinct stages**. They are owned by
-separate components, and it is important to keep them straight:
+## Prerequisites
 
-```
- stage 1                stage 2                stage 3                stage 4
- ───────                ───────                ───────                ───────
+### For Docker mode
 
- gridsfm_topo           topology_solver_pipeline  scenario generator     GridSFM
- (upstream package)     (this directory)       (this directory)       (downstream)
- ──────────────         ─────────────────      ──────────────────     ─────────
- build PowerModels ──►  apply the minimum ──►  perturb the solvable ──►  train /
- topology JSONs         parameter             base grid and solve       evaluate on
- from raw grid          relaxations needed    strict AC-OPF to emit     the resulting
- sources (OSM,          to make the topo      one .pyg.json per         .pyg.json
- utility feeds,         AC-OPF-solvable       scenario (5 modes ×       files
- open datasets)         cold-strict           N + 1 unperturbed)
+- Docker 20.10+
+- GNU Make
 
- output:                output:                output:                consumes:
- raw topology           .solvable.json         per-grid folder of     .pyg.json via
- JSON (not always       (canonical, cold-     .pyg.json files with    build_hetero_
- AC-OPF-solvable)       strict solvable)      AC-OPF solution +       data_from_json
-                                              duals + perturbation
-                                              metadata
-```
+### For local mode
 
-**Important — what `topology_solver_pipeline` actually is**: stage 2 only. Its job
-is narrow: take one raw topology JSON and produce one cold-strict solvable
-version (`.solvable.json`). It does **not** generate scenarios, and it does
-**not** write GridSFM's `.pyg.json` schema. That is stage 3.
+- **Julia 1.11+** — install from [julialang.org](https://julialang.org/downloads/)
+  or via juliaup:
+  ```bash
+  curl -fsSL https://install.julialang.org | sh
+  ```
+  After installation, restart your terminal and verify:
+  ```bash
+  julia --version
+  # Should show: julia version 1.11.x
+  ```
 
-Stage 3 — the scenario generator — is currently housed in the same
-directory for convenience (it needs the `.solvable.json` from stage 2 as
-input and lives right next to it), but it is a logically separate
-component: it consumes `.solvable.json` files and emits `.pyg.json` files
-by applying controlled perturbations and solving strict AC-OPF. The files
-belonging to each stage are clearly delineated below.
+- **Python 3** — needed only for the integration test's optional
+  `build_hetero_data_from_json` sanity check (skipped gracefully if not available).
 
----
+- **GNU Make**
 
-## Files, by stage
+### Input data
 
-### Stage 2 — `topology_solver_pipeline` proper (raw topo  →  .solvable.json)
-
-**`run_opf_relaxation.jl`** — the relaxation engine. Holds the logic for
-running AC / DC / SOC OPF with optional escalation across relaxation
-**levels** (L0 means "solve as-is", L1..L5 progressively widen thermal
-ratings / Q limits / voltage bounds / Pmin / load cap, and AC1 injects
-DC-derived shunt compensation). Also handles generator de-commitment,
-impedance-consistency fixes, and bounded shunt injection. It is never run
-directly in this pipeline; it's included by the driver below.
-
-**`solve_topo_json.jl`** — the public entry point for stage 2. Given a raw
-topology JSON, it iterates **L0 → AC1 → L1 → L2 → L3 → L4 → L5**, writes the
-mutated data after each level to a tmp file, and verifies cold-strict
-solvability by reloading that tmp file, zeroing every warm-start field, and
-running strict AC-OPF. First level that converges wins and is written to
-`<input>.solvable.json`.
-
-```bash
-julia --project=. solve_topo_json.jl <input.json> <output.solvable.json>
-```
-
-That is the full extent of stage 2. The output `.solvable.json` is a plain
-PowerModels-native JSON — any downstream tool that uses PowerModels can
-load it directly.
-
-### Stage 3 — scenario generator (.solvable.json  →  .pyg.json files)
-
-This stage happens to live in the same directory, but it is a separate
-concern: it reads `.solvable.json` base grids from stage 2 and writes
-GridSFM-schema `.pyg.json` files.
-
-**`export_gridsfm_data.jl`** — solves one `.solvable.json` with strict AC-OPF
-and writes one `.pyg.json` in the gridSFM schema (grid topology +
-AC-OPF solution + duals + metadata). Useful for inspecting a single base
-case or building a tiny reference set. The schema itself is documented in
-the file header. Its `build_gridsfm_data` function is the single source of
-truth for that schema and is reused by the bulk generator below.
-
-```bash
-julia --project=. export_gridsfm_data.jl <input.solvable.json> <output.pyg.json>
-```
-
-**`gen_perturbed_data.jl`** — the bulk scenario generator. Reads a list file
-naming one or more `.solvable.json` base grids and how many scenarios per
-mode to produce for each, then spawns worker processes via
-`Distributed.pmap` and generates, in parallel across the whole pool:
-
-- one **`base_unperturbed.pyg.json`** per grid (the solvable topology as-is),
-  plus
-- **N scenarios per mode × 5 modes** per grid, where each scenario applies
-  exactly one of the five pure perturbation modes:
-
-  | Mode       | What it does                                                                                   |
-  |------------|------------------------------------------------------------------------------------------------|
-  | `loads`    | Pick `sf ∈ [0.8, 1.5]`, then `pd,qd *= sf · (0.9 + 0.2·rand)` (±10% per-load jitter)           |
-  | `costs`    | Shuffle cost coefficients among ~40% of active gens, within same-`ncost` pools                 |
-  | `killgen`  | Flip `gen_status=0` on 1 / 2 / 3 gens (probabilities 0.7 / 0.2 / 0.1), preserving ≥2 active    |
-  | `derate`   | On ~10% of active branches, scale `rate_a/b/c` by a uniform factor ∈ [0.7, 0.95]               |
-  | `vsqueeze` | On ~10% of buses, `vmin += rand·0.01` and `vmax -= rand·0.01` (per-boundary, independent)      |
-
-Each scenario applies one perturbation, solves strict AC-OPF, and exports a
-`.pyg.json` tagged by `perturb_mode` in metadata. The pure-mode split — as
-opposed to random combinations of all five — keeps the per-mode signal
-uncorrelated. Output layout:
-
-```
-<out_root>/<case>/base_unperturbed.pyg.json
-<out_root>/<case>/loads_0001.pyg.json     ... loads_NNNN.pyg.json
-<out_root>/<case>/costs_0001.pyg.json     ... costs_NNNN.pyg.json
-<out_root>/<case>/killgen_0001.pyg.json   ... killgen_NNNN.pyg.json
-<out_root>/<case>/derate_0001.pyg.json    ... derate_NNNN.pyg.json
-<out_root>/<case>/vsqueeze_0001.pyg.json  ... vsqueeze_NNNN.pyg.json
-```
-
-Grid-list format (one line per base grid, `#` for comments):
-
-```
-# <solvable_json_path>  <n_per_mode>
-<solvable_out_dir>/alabama.solvable.json  400
-<solvable_out_dir>/montana.solvable.json  400
-```
-
-Total scenarios per grid = **1 + 5 × n_per_mode**. The pmap is global across
-all listed grids so workers never idle between cases, and the generator is
-resume-friendly — existing `.pyg.json` files are skipped on restart.
-
-**`run_gen_gridsfm_data.sh`** — convenience driver for
-`gen_perturbed_data.jl`. Every tunable is a positional CLI arg with a
-default; leave later args unset to keep their defaults.
-
-```bash
-bash run_gen_gridsfm_data.sh [n_proc] [out_root] [grid_list] [cpu_range]
-```
-
-| Arg         | Default                              | Meaning                                                    |
-|-------------|--------------------------------------|------------------------------------------------------------|
-| `n_proc`    | `51`                                 | worker processes                                           |
-| `out_root`  | `./out`        | per-grid output folders land here                          |
-| `grid_list` | `$SCRIPT_DIR/grids_solvable.txt`     | one line per grid: `<solvable.json_path>  <n_per_mode>`    |
-| `cpu_range` | `77-127`                             | `taskset -c` mask (51 cores by default)                    |
-
-### Stage-3 verification — reconstruct-and-resolve a `.pyg.json`
-
-**`solve_pyg_json.jl`** — answers the question *"is this `.pyg.json` a
-usable input?"* by reconstructing the exact PowerModels data the scenario
-represents, solving strict AC-OPF, and comparing the result against
-`metadata.objective`.
-
-Given a solvable base + a perturbed scenario, it starts from the
-`.solvable.json` (which has every field PowerModels needs) and overlays
-the perturbed values from the `.pyg.json`:
-
-| Perturbation | Source in `.pyg.json`                                  |
-|-------------|---------------------------------------------------------|
-| loads       | `grid.nodes.load[:, 1:2]` → `pd`, `qd`                  |
-| killgen     | gens absent from `grid.nodes.generator` → `gen_status=0`|
-| derate      | `grid.edges.{ac_line,transformer}.features` → rate_a/b/c |
-| vsqueeze    | `grid.nodes.bus[:, 3:4]` → `vmin`, `vmax`               |
-| costs       | `grid.nodes.generator[:, 9:11]` → `cp2`, `cp1`, `cp0`   |
-
-Warm-start (`va/vm/pg/qg`) comes from `solution.nodes.{bus,generator}`.
-
-```bash
-julia --project=. solve_pyg_json.jl <solvable.json> <scenario.pyg.json>
-```
-
-Prints `RESOLVE ok obj=<x> expected=<y> Δ=<pct>%` and exits 0 iff the
-re-solve converges AND the objective matches within 0.1%; exits 1
-otherwise. This is the true integrity check for stage-3 outputs — if it
-passes, the `.pyg.json` contained enough information to exactly reproduce
-the solve that produced it.
-
-### End-to-end integration test (crosses stages 2 + 3)
-
-**`integration_test_all_components.sh`** — full-pipeline smoke test.
-A bash script that orchestrates the four Julia CLI binaries in this
-directory; shell is the natural fit for multi-process orchestration.
-
-1. **Stage 2 — solve**: `solve_topo_json.jl` → `raw.solvable.json`.
-2. **Stage 3 — export**: `export_gridsfm_data.jl` → `raw.pyg.json`.
-3. **Stage 2 — resolve**: strict AC-OPF on the solvable; objective must
-   match step 2 within 0.01%.
-4. **Stage 3 — perturb+resolve**: `gen_perturbed_data.jl` with
-   `n_per_mode=1`, then `solve_pyg_json.jl` on each of the six outputs
-   (`base_unperturbed` + one per mode). Each scenario must re-solve with
-   Δ < 0.1% vs its recorded `metadata.objective`.
-
-A Python sanity step (skipped gracefully if `gridfm` isn't importable on
-the host's `python3` / `$GRIDFM_PYTHON`) confirms
-`build_hetero_data_from_json` parses the `.pyg.json` cleanly.
-
-```bash
-bash integration_test_all_components.sh <raw_input.json> [out_dir=/tmp/topo_solver_pipe_test]
-```
-
-Exits 0 on all checks green, non-zero otherwise. Use it as the single CI
-gate for changes to any file in this directory.
+PowerModels-compatible topology JSON files from the
+[GridSFM US Power Grid data release](../../../README.md). The data directory
+should contain `04h/` and `16h/` subdirectories with `*_model.json` files.
 
 ---
 
-## End-to-end example
-
-This directory is **self-contained**: its own `Project.toml` + `Manifest.toml`
-live alongside the scripts, so every Julia invocation uses `--project=.`
-and no parent-project lookup is needed. On first run, Julia will
-instantiate the environment (package download + precompile) from the
-pinned Manifest:
+## Quick Start
 
 ```bash
-cd <wherever you put topology_solver_pipeline/>
-julia --project=. -e 'using Pkg; Pkg.instantiate()'
+cd power_grid/US/topology_solver_pipeline
+make help
 ```
 
-Assuming `<topo_data_path>` is wherever `gridsfm_topo` wrote its raw
-topology JSONs and `<solvable_out_dir>` is wherever you want the stage-2
-outputs to land:
+### Docker
 
 ```bash
-# 1. Make a raw gridsfm_topo output cold-strict solvable.
-julia --project=. solve_topo_json.jl \
-    <topo_data_path>/alabama.json \
-    <solvable_out_dir>/alabama.solvable.json
+make build
+make run STATE=alabama DATA_DIR=/path/to/GridSFM_US_power_grid
+```
 
-# 2. Generate GridSFM-capable input files from one or more solvable files.
-cat > grids_solvable.txt <<EOF
-<solvable_out_dir>/alabama.solvable.json  400
-<solvable_out_dir>/montana.solvable.json  400
+### Local
+
+```bash
+make local-install                    # one-time: download + precompile Julia packages
+make local-run STATE=alabama DATA_DIR=/path/to/GridSFM_US_power_grid
+```
+
+---
+
+## 1. Setup
+
+### Docker: Build the image
+
+```bash
+make build          # cached build
+make rebuild        # full rebuild (no cache)
+```
+
+### Local: Install Julia packages
+
+```bash
+make local-install  # one-time: instantiate from Manifest.toml + precompile
+make local-check    # verify Julia and all packages load correctly
+```
+
+## 2. Run the Full Pipeline for a State
+
+Runs all stages: patch → solve → export → perturb → verify.
+
+### Docker
+
+```bash
+make run STATE=alabama DATA_DIR=/path/to/GridSFM_US_power_grid
+make run STATE=montana DATA_DIR=/path/to/GridSFM_US_power_grid HOUR=04h
+make run STATE=alabama DATA_DIR=/path/to/GridSFM_US_power_grid N_PER_MODE=5
+```
+
+Shortcuts:
+```bash
+make run-alabama DATA_DIR=...
+make run-montana DATA_DIR=...
+make run-both DATA_DIR=...
+```
+
+### Local
+
+```bash
+make local-run STATE=alabama DATA_DIR=/path/to/GridSFM_US_power_grid
+make local-run STATE=montana DATA_DIR=/path/to/GridSFM_US_power_grid
+```
+
+Shortcuts:
+```bash
+make local-run-alabama DATA_DIR=...
+make local-run-montana DATA_DIR=...
+make local-run-both DATA_DIR=...
+```
+
+## 3. Run Individual Stages
+
+Each stage can be run independently. Stages that operate only on pipeline
+outputs (`export`, `perturb`, `verify`, `verify-one`) do **not** require
+`DATA_DIR`.
+
+| Stage | Docker | Local |
+|-------|--------|-------|
+| Patch model for compatibility | `make patch` | `make local-patch` |
+| Solve (raw → solvable) | `make solve` | `make local-solve` |
+| Export (solvable → .pyg.json) | `make export` | `make local-export` |
+| Perturb (generate scenarios) | `make perturb` | `make local-perturb` |
+| Verify all scenarios | `make verify` | `make local-verify` |
+| Verify one scenario | `make verify-one` | `make local-verify-one` |
+
+Examples:
+```bash
+# Docker
+make solve STATE=alabama DATA_DIR=...
+make export STATE=alabama                    # no DATA_DIR needed
+make perturb STATE=alabama N_PER_MODE=5
+make verify STATE=alabama
+make verify-one STATE=alabama PYG_FILE=alabama_16h/scenarios/alabama_model/costs_0001.pyg.json
+
+# Local
+make local-solve STATE=alabama DATA_DIR=...
+make local-export STATE=alabama
+make local-perturb STATE=alabama N_PER_MODE=5
+make local-verify STATE=alabama
+make local-verify-one STATE=alabama PYG_FILE=alabama_16h/scenarios/alabama_model/costs_0001.pyg.json
+```
+
+## 4. Bulk Multi-Grid Scenario Generation
+
+Generate scenarios for multiple grids in one run. Create a grid list file with
+one `<solvable.json> <n_per_mode>` per line:
+
+```bash
+cat > grids.txt <<EOF
+/output/alabama_16h/alabama_model.solvable.json 400
+/output/montana_16h/montana_model.solvable.json 400
 EOF
-bash run_gen_gridsfm_data.sh 51 ./out
-
-# 3. Smoke-test the full pipeline end-to-end on one raw file.
-bash integration_test_all_components.sh <topo_data_path>/alabama.json
-
-# 4. Verify one specific perturbed scenario stands on its own.
-julia --project=. solve_pyg_json.jl \
-    <solvable_out_dir>/alabama.solvable.json \
-    ./out/alabama/loads_0001.pyg.json
 ```
 
-The resulting `<out_root>/<case>/*.pyg.json` files drop straight into the
-existing GridSFM data-loading path — no schema adapter needed, same layout
-as the rest of the GridSFM-capable inputs.
+**Docker** (paths in the grid list are container paths under `/output`):
+```bash
+make gen-bulk GRID_LIST=./grids.txt N_WORKERS=8
+```
+
+**Local** (paths in the grid list are host filesystem paths):
+```bash
+cat > grids.txt <<EOF
+$(pwd)/output/alabama_16h/alabama_model.solvable.json 400
+$(pwd)/output/montana_16h/montana_model.solvable.json 400
+EOF
+make local-gen-bulk GRID_LIST=./grids.txt N_WORKERS=8
+```
+
+## 5. Integration Test
+
+Full end-to-end smoke test: solve → export → re-solve → perturb → round-trip
+verify with objective consistency checks.
+
+```bash
+# Docker
+make integration-test STATE=alabama DATA_DIR=...
+
+# Local
+make local-integration-test STATE=alabama DATA_DIR=...
+```
+
+## 6. Interactive Access
+
+```bash
+# Docker: bash shell
+make shell DATA_DIR=...
+
+# Docker: Julia REPL
+make julia-repl DATA_DIR=...
+
+# Local: Julia REPL with project environment
+make local-julia-repl
+```
+
+## 7. Inspect Results
+
+These targets work the same for both Docker and local:
+
+```bash
+make list-states DATA_DIR=...    # list available states in data directory
+make list-output                 # list all output artifacts
+make output-size                 # show output directory sizes
+```
+
+## 8. Cleanup
+
+```bash
+make clean-state STATE=alabama HOUR=16h   # remove output for one state
+make clean                                # remove all output
+make clean-image                          # remove Docker image
+make clean-all                            # remove output + Docker image
+```
+
+---
+
+## Configuration Variables
+
+All variables can be overridden on the command line:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `IMAGE` | `topo_solver_pipe` | Docker image name |
+| `DATA_DIR` | *(required for solve/run)* | Path to `GridSFM_US_power_grid/` directory |
+| `OUTPUT_DIR` | `./output` | Host directory for output artifacts |
+| `STATE` | `alabama` | State name (e.g., `montana`, `texas`) |
+| `HOUR` | `16h` | Operating hour (`16h` peak or `04h` off-peak) |
+| `N_PER_MODE` | `1` | Scenarios per perturbation mode |
+| `N_WORKERS` | `2` | Julia worker processes for scenario generation |
+| `GRID_LIST` | *(required for gen-bulk)* | Grid list file for bulk generation |
+| `PYG_FILE` | *(required for verify-one)* | Scenario file path relative to `OUTPUT_DIR` |
+
+Example:
+```bash
+make local-run STATE=texas DATA_DIR=/mnt/data/GridSFM_US_power_grid OUTPUT_DIR=/mnt/results N_PER_MODE=10
+```
+
+---
+
+## Makefile → Julia Script Mapping
+
+Every Makefile target is a convenience wrapper around a Julia script
+documented in [PIPELINE_DETAILS.md](PIPELINE_DETAILS.md):
+
+| Julia script / command | Docker target | Local target |
+|---|---|---|
+| `Pkg.instantiate()` | `make build` | `make local-install` |
+| `solve_topo_json.jl` | `make solve` | `make local-solve` |
+| `export_gridsfm_data.jl` | `make export` | `make local-export` |
+| `gen_perturbed_data.jl` | `make perturb` | `make local-perturb` |
+| `run_gen_gridsfm_data.sh` | `make gen-bulk` | `make local-gen-bulk` |
+| `solve_pyg_json.jl` (one) | `make verify-one` | `make local-verify-one` |
+| `solve_pyg_json.jl` (all) | `make verify` | `make local-verify` |
+| `integration_test_all_components.sh` | `make integration-test` | `make local-integration-test` |
+
+---
+
+## Pipeline Stages Explained
+
+```
+ Stage 2a               Stage 2b               Stage 3
+ ────────               ────────               ───────
+ solve_topo_json.jl     export_gridsfm_data.jl gen_perturbed_data.jl
+ ─────────────────      ────────────────────── ──────────────────────
+ raw topology JSON  ──► .solvable.json     ──► .pyg.json files
+ (possibly not          (cold-strict            (per-mode perturbed
+  AC-OPF solvable)       AC-OPF solvable)       scenarios + base)
+```
+
+### Perturbation Modes (Stage 3)
+
+| Mode       | Description |
+|------------|-------------|
+| `loads`    | Scale system load by factor ∈ [0.8, 1.5] with ±10% per-load jitter |
+| `costs`    | Shuffle cost coefficients among ~40% of active generators |
+| `killgen`  | Deactivate 1-3 generators (preserving ≥2 active) |
+| `derate`   | Scale branch ratings on ~10% of branches by [0.7, 0.95] |
+| `vsqueeze` | Shrink voltage bands on ~10% of buses by up to 0.01 pu |
+
+### Relaxation Levels (Stage 2a)
+
+| Level | Name | Description |
+|-------|------|-------------|
+| L0 | Strict | Model as-is |
+| AC1 | V + Q relax | Voltage [0.90,1.10], Q limits ×1.5 |
+| L1 | Widen angles | Branch angles ±60° |
+| L2 | Thermal headroom | Ratings ×1.2, angles ±60° |
+| L3 | Aggressive | Ratings ×1.5, angles ±90°, pmin ×0.5 |
+| L4 | Load shedding | Load capped 70%, ratings ×1.5, angles ±90°, pmin=0 |
+| L5 | Full relaxation | No thermal limits, V [0.85,1.15], Q ×2.0 |
+
+## Output Structure
+
+After running the full pipeline for a state:
+
+```
+output/alabama_16h/
+├── alabama_model.solvable.json         # Cold-strict solvable topology
+├── alabama_model.pyg.json              # Base gridSFM export
+├── grids_solvable.txt                  # Grid list used for scenario generation
+└── scenarios/
+    └── alabama_model/
+        ├── base_unperturbed.pyg.json   # Unperturbed base case
+        ├── loads_0001.pyg.json         # Load perturbation scenario
+        ├── costs_0001.pyg.json         # Cost perturbation scenario
+        ├── killgen_0001.pyg.json       # Generator trip scenario
+        ├── derate_0001.pyg.json        # Branch derating scenario
+        └── vsqueeze_0001.pyg.json      # Voltage squeeze scenario
+```
+
+## Troubleshooting
+
+### Julia not found (local mode)
+Ensure Julia 1.11+ is on your PATH:
+```bash
+julia --version
+```
+If not installed, see [julialang.org/downloads](https://julialang.org/downloads/).
+
+### Package instantiation fails (local mode)
+The `Manifest.toml` pins exact versions for Julia 1.11. If you have a different
+Julia version, you may need to resolve:
+```bash
+cd power_grid/US/topology_solver_pipeline
+julia --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate()'
+```
+
+### Build fails on package instantiation (Docker)
+Ensure Docker has internet access for downloading packages from the Julia
+package registry.
+
+### Solver is slow
+Large state models (e.g., Texas, California) may take 10+ minutes per
+relaxation level. First runs in local mode include Julia compilation time
+(~30-60s). Subsequent runs are faster.
+
+### Permission errors on output (Docker)
+Docker writes files as root. The `clean` / `clean-state` targets handle this
+automatically by using Docker to remove root-owned files. If you need manual
+cleanup:
+```bash
+docker run --rm -v $(pwd)/output:/output topo_solver_pipe -c "rm -rf /output/*"
+```

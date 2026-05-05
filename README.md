@@ -82,7 +82,20 @@ evaluation. The pipeline has two main stages:
    the solvable base grid and solves each variant, emitting one `.pyg.json`
    per scenario.
 
-See [power_grid/US/topology_solver_pipeline/README.md](power_grid/US/topology_solver_pipeline/README.md) for full documentation, file descriptions, and usage examples.
+See the [topology_solver_pipeline README](power_grid/US/topology_solver_pipeline/README.md) for setup and high-level usage, and [PIPELINE_DETAILS.md](power_grid/US/topology_solver_pipeline/PIPELINE_DETAILS.md) for in-depth file and stage documentation.
+
+### Citation
+
+If you use the power grid data or pipeline, please cite:
+
+```bibtex
+@article{britto2026powergrid,
+  title   = {Building Power Grid Models from Open Data: A Complete Pipeline from OpenStreetMap to Optimal Power Flow},
+  author  = {Britto, Andrea and Spina, Thiago and Yang, Weiwei and Fowers, Spencer and Zhang, Baosen and White, Chris},
+  year    = {2026},
+  note    = {Microsoft Research Catalyst Lab}
+}
+```
 
 ## License
 

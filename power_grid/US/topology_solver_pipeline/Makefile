@@ -13,7 +13,7 @@
 #   make local-install          # one-time: instantiate Julia packages
 #   make local-run STATE=alabama HOUR=16h DATA_DIR=/path/to/GridSFM_US_power_grid
 #
-# See INSTALL_AND_QUICKSTART.md for detailed usage.
+# See README.md for detailed usage.
 # =============================================================================
 
 # ── Configuration (override on command line) ─────────────────────────────────

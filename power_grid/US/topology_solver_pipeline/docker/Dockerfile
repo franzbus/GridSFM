@@ -21,7 +21,7 @@
 #       topology_solver_pipeline -c 'julia --project=/app solve_topo_json.jl \
 #       /data/16h/alabama_model.json /output/alabama.solvable.json'
 #
-# See INSTALL_AND_QUICKSTART.md for detailed usage instructions.
+# See README.md for detailed usage instructions.
 # =============================================================================
 
 # --- Base image: Julia 1.11 on Debian bookworm ---
