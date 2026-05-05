@@ -428,7 +428,7 @@ end
 
 # Locate the JSON relative to this script. Tries two canonical layouts:
 #   1. scripts + shared/ co-located    <dir>/shared/relaxation_levels.json  (self-contained OSS layout)
-#   2. scripts at <repo>/topo_solver_pipe/   shared at <repo>/shared/        (one-up, legacy)
+#   2. scripts at <repo>/topology_solver_pipeline/   shared at <repo>/shared/        (one-up, legacy)
 # so the SAME script works in either layout without editing.
 function _find_shared_json()
     for cand in [

@@ -1,10 +1,10 @@
 # =============================================================================
-# Dockerfile — topo_solver_pipe: from raw topology to solved gridSFM scenarios
+# Dockerfile — topology_solver_pipeline: from raw topology to solved GridSFM scenarios
 # =============================================================================
 #
-# This image packages the full topo_solver_pipe pipeline (stages 2-3) from the
-# power_grid_topology project. It installs Julia 1.11, all required Julia
-# packages (PowerModels.jl, Ipopt, HiGHS, etc.), and provides entry points for
+# This image packages the full topology_solver_pipeline (stages 2-3) from the
+# GridSFM project. It installs Julia 1.11, all required Julia
+# packages (PowerModels.jl, Ipopt, etc.), and provides entry points for
 # each pipeline stage:
 #
 #   Stage 2: solve_topo_json.jl         — make a raw topology cold-strict solvable
@@ -13,12 +13,12 @@
 #   Verify:  solve_pyg_json.jl          — round-trip verify a .pyg.json
 #   Test:    integration_test_all_components.sh — full end-to-end smoke test
 #
-# Build (from solver/topo_solver_pipe):
-#   docker build -t topo_solver_pipe -f docker/Dockerfile .
+# Build (from topology_solver_pipeline/):
+#   docker build -t topology_solver_pipeline -f docker/Dockerfile .
 #
 # Run (mount your data):
 #   docker run --rm -v /path/to/data:/data -v /path/to/output:/output \
-#       topo_solver_pipe -c 'julia --project=/app solve_topo_json.jl \
+#       topology_solver_pipeline -c 'julia --project=/app solve_topo_json.jl \
 #       /data/16h/alabama_model.json /output/alabama.solvable.json'
 #
 # See INSTALL_AND_QUICKSTART.md for detailed usage instructions.
@@ -28,7 +28,7 @@
 FROM julia:1.11-bookworm
 
 LABEL maintainer="Microsoft Research Catalyst Lab"
-LABEL description="topo_solver_pipe — power grid topology to OPF-solved gridSFM scenarios"
+LABEL description="topology_solver_pipeline — power grid topology to OPF-solved gridSFM scenarios"
 
 # Install system dependencies (Python3 for consistency checks, basic tools)
 RUN apt-get update && apt-get install -y --no-install-recommends \

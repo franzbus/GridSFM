@@ -1,6 +1,6 @@
-# gridSFM data pipeline — from raw topology to solved scenarios
+# GridSFM data pipeline — from raw topology to solved scenarios
 
-The full pipeline that turns a raw grid topology into gridSFM-capable
+The full pipeline that turns a raw grid topology into GridSFM-capable
 `.pyg.json` input files has **four distinct stages**. They are owned by
 separate components, and it is important to keep them straight:
 
@@ -8,7 +8,7 @@ separate components, and it is important to keep them straight:
  stage 1                stage 2                stage 3                stage 4
  ───────                ───────                ───────                ───────
 
- gridsfm_topo           topo_solver_pipe      scenario generator     gridSFM
+ gridsfm_topo           topology_solver_pipeline  scenario generator     GridSFM
  (upstream package)     (this directory)       (this directory)       (downstream)
  ──────────────         ─────────────────      ──────────────────     ─────────
  build PowerModels ──►  apply the minimum ──►  perturb the solvable ──►  train /
@@ -26,10 +26,10 @@ separate components, and it is important to keep them straight:
                                               metadata
 ```
 
-**Important — what `topo_solver_pipe` actually is**: stage 2 only. Its job
+**Important — what `topology_solver_pipeline` actually is**: stage 2 only. Its job
 is narrow: take one raw topology JSON and produce one cold-strict solvable
 version (`.solvable.json`). It does **not** generate scenarios, and it does
-**not** write gridSFM's `.pyg.json` schema. That is stage 3.
+**not** write GridSFM's `.pyg.json` schema. That is stage 3.
 
 Stage 3 — the scenario generator — is currently housed in the same
 directory for convenience (it needs the `.solvable.json` from stage 2 as
@@ -42,7 +42,7 @@ belonging to each stage are clearly delineated below.
 
 ## Files, by stage
 
-### Stage 2 — `topo_solver_pipe` proper (raw topo  →  .solvable.json)
+### Stage 2 — `topology_solver_pipeline` proper (raw topo  →  .solvable.json)
 
 **`run_opf_relaxation.jl`** — the relaxation engine. Holds the logic for
 running AC / DC / SOC OPF with optional escalation across relaxation
@@ -71,7 +71,7 @@ load it directly.
 
 This stage happens to live in the same directory, but it is a separate
 concern: it reads `.solvable.json` base grids from stage 2 and writes
-gridSFM-schema `.pyg.json` files.
+GridSFM-schema `.pyg.json` files.
 
 **`export_gridsfm_data.jl`** — solves one `.solvable.json` with strict AC-OPF
 and writes one `.pyg.json` in the gridSFM schema (grid topology +
@@ -211,7 +211,7 @@ instantiate the environment (package download + precompile) from the
 pinned Manifest:
 
 ```bash
-cd <wherever you put topo_solver_pipe/>
+cd <wherever you put topology_solver_pipeline/>
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 ```
 
@@ -225,7 +225,7 @@ julia --project=. solve_topo_json.jl \
     <topo_data_path>/alabama.json \
     <solvable_out_dir>/alabama.solvable.json
 
-# 2. Generate gridSFM-capable input files from one or more solvable files.
+# 2. Generate GridSFM-capable input files from one or more solvable files.
 cat > grids_solvable.txt <<EOF
 <solvable_out_dir>/alabama.solvable.json  400
 <solvable_out_dir>/montana.solvable.json  400
@@ -242,5 +242,5 @@ julia --project=. solve_pyg_json.jl \
 ```
 
 The resulting `<out_root>/<case>/*.pyg.json` files drop straight into the
-existing gridSFM data-loading path — no schema adapter needed, same layout
-as the rest of the gridSFM-capable inputs.
+existing GridSFM data-loading path — no schema adapter needed, same layout
+as the rest of the GridSFM-capable inputs.

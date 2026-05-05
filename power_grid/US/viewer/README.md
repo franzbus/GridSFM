@@ -11,9 +11,14 @@ Python 3.10+ (stdlib only — no pip packages needed). The front-end uses
 
 ## Usage
 
+The viewer requires a data directory containing `16h/` and `04h/`
+subfolders with `*_model.json`, `*_ac_results.json`, and
+`*_dc_results.json` files (e.g. the directory created by the HuggingFace
+loader's `export_dir` or `download_all`).
+
 ```bash
-cd viewer
-python serve.py --data-dir ../ --port 8050
+cd power_grid/US/viewer
+python serve.py --data-dir /path/to/gridsfm_data --port 8050
 ```
 
 Then open `http://localhost:8050` in a browser.

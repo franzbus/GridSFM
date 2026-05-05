@@ -66,8 +66,14 @@ See [power_grid/US/topology_solver_pipeline/README.md](power_grid/US/topology_so
 
 #### `power_grid/US/viewer/` — Data viewer
 
-A lightweight browser-based viewer for inspecting grid data. Serve locally
-with `python serve.py` inside the `viewer/` directory.
+A lightweight browser-based viewer for inspecting grid data. Requires a
+data directory with `16h/` and `04h/` subfolders (e.g. the output of
+`GridSFM_PG_Loader.download_all()`).
+
+```bash
+cd power_grid/US/viewer
+python serve.py --data-dir /path/to/gridsfm_data
+```
 
 ## License
 

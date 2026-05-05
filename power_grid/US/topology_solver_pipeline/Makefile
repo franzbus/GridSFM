@@ -1,5 +1,5 @@
 # =============================================================================
-# Makefile — topo_solver_pipe pipeline (Docker + Local)
+# Makefile — topology_solver_pipeline (Docker + Local)
 # =============================================================================
 #
 # Runs all pipeline stages either inside Docker or locally with a native
@@ -46,7 +46,7 @@ PYG_FILE      ?=
 
 # ── Derived paths ────────────────────────────────────────────────────────────
 
-# topo_solver_pipe root (this directory)
+# topology_solver_pipeline root (this directory)
 PIPE_DIR      := $(CURDIR)
 
 # Julia project flag for local execution
@@ -408,7 +408,7 @@ clean-all: clean clean-image ## Remove all output and the Docker image
 
 .PHONY: help
 help: ## Show this help message
-	@echo "topo_solver_pipe Pipeline (Docker + Local)"
+	@echo "topology_solver_pipeline (Docker + Local)"
 	@echo ""
 	@echo "Usage: make <target> [VAR=value ...]"
 	@echo ""

@@ -61,7 +61,7 @@ import shutil
 from pathlib import Path
 from typing import Optional
 
-from huggingface_hub import hf_hub_download, snapshot_download
+from huggingface_hub import dataset_info, hf_hub_download, snapshot_download
 
 METADATA_FILENAME = "dataset_metadata.json"
 
@@ -100,6 +100,15 @@ class GridSFM_PG_Loader:
         self.repo_type = "dataset"
         self.export_dir: Optional[Path] = Path(export_dir) if export_dir else None
         self._metadata: Optional[dict] = None
+
+        # Verify the dataset exists on HuggingFace Hub
+        try:
+            dataset_info(repo_id, revision=revision, token=token)
+        except Exception as exc:
+            raise ValueError(
+                f"Dataset '{repo_id}' is not available on HuggingFace Hub. "
+                f"Check the repo ID and your network connection."
+            ) from exc
 
         if self.export_dir is not None and pre_fetch_all:
             self.download_all(str(self.export_dir))

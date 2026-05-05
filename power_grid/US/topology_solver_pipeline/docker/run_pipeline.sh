@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# run_pipeline.sh — Run the full topo_solver_pipe pipeline inside Docker
+# run_pipeline.sh — Run the full topology_solver_pipeline inside Docker
 # =============================================================================
 #
 # This script runs all 4 stages of the pipeline for a given state model:
@@ -41,7 +41,7 @@ SCEN_DIR="$OUT_DIR/scenarios"
 GRID_LIST="$OUT_DIR/grids_solvable.txt"
 
 echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║  topo_solver_pipe — full pipeline run                       ║"
+echo "║  topology_solver_pipeline — full pipeline run                       ║"
 echo "╠══════════════════════════════════════════════════════════════╣"
 echo "║  State:       $STATE"
 echo "║  Hour:        $HOUR"

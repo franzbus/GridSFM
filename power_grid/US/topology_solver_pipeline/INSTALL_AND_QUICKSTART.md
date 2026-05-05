@@ -1,6 +1,6 @@
-# topo_solver_pipe — Usage Guide (Docker + Local)
+# topology_solver_pipeline — Usage Guide (Docker + Local)
 
-Pipeline for converting raw power grid topology JSONs into OPF-solved gridSFM
+Pipeline for converting raw power grid topology JSONs into OPF-solved GridSFM
 scenarios. Supports two execution modes:
 
 - **Docker** — self-contained image with Julia 1.11, PowerModels.jl, Ipopt, and
@@ -246,7 +246,7 @@ make local-run STATE=texas DATA_DIR=/mnt/data/GridSFM_US_power_grid OUTPUT_DIR=/
 
 ## README.md → Makefile Mapping
 
-Every command in the [topo_solver_pipe README](../README.md) has Docker and local
+Every command in the [topology_solver_pipeline README](README.md) has Docker and local
 Makefile targets:
 
 | README instruction | Docker target | Local target |

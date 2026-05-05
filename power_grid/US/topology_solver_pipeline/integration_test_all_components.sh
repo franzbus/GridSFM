@@ -1,6 +1,6 @@
 #!/bin/bash
 # integration_test_all_components.sh — end-to-end verification of the
-# topo_solver_pipe/ pipeline.
+# topology_solver_pipeline/ pipeline.
 #
 # Orchestrates the four Julia CLI binaries in this directory plus an
 # optional Python sanity-import check; shell is the right tool for that
