@@ -6,11 +6,15 @@ tooling to obtain grid data, process raw topologies into solved AC-OPF
 scenarios, and (coming soon) load and run pre-trained surrogate models for
 fast AC-OPF estimation.
 
+Model checkpoints and power grid datasets are available on HuggingFace:
+[microsoft/gridsfm](https://huggingface.co/collections/microsoft/gridsfm).
+Use the instructions below to install our loaders and facilitate data loading.
+
 ## Repository structure
 
 ```
 GridSFM/
-├── model/              # Neural surrogate model loading & inference [TODO]
+├── model/              # Neural surrogate model loading & inference [Coming soon]
 └── power_grid/
     ├── hf_util/        # HuggingFace dataset loader
     └── US/
@@ -20,7 +24,7 @@ GridSFM/
 
 ### `model/` — Neural surrogate models
 
-**[TODO]** — This directory will contain code and documentation for loading
+**[Coming soon]** — This directory will contain code and documentation for loading
 and running GridSFM neural surrogate models for AC-OPF estimation on power
 grids. Details will be added once the model artifacts and inference code are
 available.
