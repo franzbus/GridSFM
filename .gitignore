@@ -343,6 +343,7 @@ paket-files/
 **/__pycache__/
 *.pyc
 *.egg-info/
+power_grid/hf_util/build/
 
 # Cake - Uncomment if you are using it
 #tools/**

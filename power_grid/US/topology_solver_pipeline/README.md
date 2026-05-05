@@ -1,5 +1,14 @@
 # GridSFM data pipeline — from raw topology to solved scenarios
 
+## ⚡ Start here → [Install & Quickstart guide](INSTALL_AND_QUICKSTART.md)
+
+Before reading further, follow the **[Install & Quickstart guide](INSTALL_AND_QUICKSTART.md)** to set up your environment, download the dataset from HuggingFace, and run the pipeline end-to-end with a single command (Docker or local).
+
+---
+
+The rest of this README provides detailed documentation of each file in the
+package, the four pipeline stages, and the data formats they produce.
+
 The full pipeline that turns a raw grid topology into GridSFM-capable
 `.pyg.json` input files has **four distinct stages**. They are owned by
 separate components, and it is important to keep them straight:
