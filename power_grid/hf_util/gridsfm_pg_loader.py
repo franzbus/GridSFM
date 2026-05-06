@@ -13,18 +13,18 @@ Usage:
     from gridsfm.hf_util import GridSFM_PG_Loader
 
     # Basic: files stay in HuggingFace cache
-    loader = GridSFM_PG_Loader("microsoft/GridSFM_US_power_grid_[model_date]")
+    loader = GridSFM_PG_Loader("microsoft/GridSFM_US_power_grid")
 
     # With export_dir: the entire dataset is pre-fetched to a local directory
     # (ready for the Data Viewer, PowerModels.jl, etc.)
     loader = GridSFM_PG_Loader(
-        "microsoft/GridSFM_US_power_grid_[model_date]",
+        "microsoft/GridSFM_US_power_grid",
         export_dir="./gridsfm_data",           # pre-fetches everything here
     )
 
     # To skip the automatic download, set pre_fetch_all=False
     loader = GridSFM_PG_Loader(
-        "microsoft/GridSFM_US_power_grid_[model_date]",
+        "microsoft/GridSFM_US_power_grid",
         export_dir="./gridsfm_data",
         pre_fetch_all=False,                    # download lazily on access
     )
