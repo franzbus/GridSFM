@@ -49,7 +49,7 @@ pip install ./power_grid/hf_util
 ```python
 from gridsfm.hf_util import GridSFM_PG_Loader
 
-loader = GridSFM_PG_Loader("microsoft/GridSFM_US_power_grid_[model_date]",
+loader = GridSFM_PG_Loader("microsoft/GridSFM_US_power_grid",
                             export_dir="./gridsfm_data")
 model  = loader.load_model("texas", hour="16h")
 ```
@@ -93,7 +93,7 @@ If you use the power grid data or pipeline, please cite:
   title   = {Building Power Grid Models from Open Data: A Complete Pipeline from OpenStreetMap to Optimal Power Flow},
   author  = {Britto, Andrea and Spina, Thiago and Yang, Weiwei and Fowers, Spencer and Zhang, Baosen and White, Chris},
   year    = {2026},
-  note    = {Microsoft Research Catalyst Lab}
+  note    = {Microsoft Research}
 }
 ```
 
