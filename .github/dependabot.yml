@@ -5,7 +5,20 @@
 
 version: 2
 updates:
-  - package-ecosystem: "" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  # Python: hf_util package
+  - package-ecosystem: "pip"
+    directory: "/power_grid/hf_util"
+    schedule:
+      interval: "weekly"
+
+  # Julia: topology_solver_pipeline (Project.toml / Manifest.toml)
+  - package-ecosystem: "julia"
+    directory: "/power_grid/US/topology_solver_pipeline"
+    schedule:
+      interval: "weekly"
+
+  # Docker: topology_solver_pipeline image
+  - package-ecosystem: "docker"
+    directory: "/power_grid/US/topology_solver_pipeline/docker"
     schedule:
       interval: "weekly"
