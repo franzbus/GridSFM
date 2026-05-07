@@ -38,6 +38,10 @@ N_PER_MODE    ?= 1
 # Number of Julia worker processes for scenario generation
 N_WORKERS     ?= 2
 
+# CPU core range for taskset pinning in bulk scenario generation (e.g. 0-7).
+# Leave empty to auto-detect as 0-$(nproc-1) at runtime.
+CPU_RANGE     ?=
+
 # Grid list file for bulk generation (one "<solvable.json> <n_per_mode>" per line)
 GRID_LIST     ?=
 
@@ -320,8 +324,10 @@ local-perturb: ## [local] Stage 3b: Generate perturbed scenarios (single state)
 local-gen-bulk: ## [local] Stage 3b: Bulk scenario generation from GRID_LIST (multi-grid)
 	$(if $(GRID_LIST),,$(error GRID_LIST is not set. Create a grid list file and pass GRID_LIST=/path/to/grids.txt))
 	@mkdir -p $(OUTPUT_DIR)/scenarios
+	CPU_RANGE="$(CPU_RANGE)"; \
+	if [ -z "$$CPU_RANGE" ]; then CPU_RANGE="0-$$(( $$(nproc) - 1 ))"; fi; \
 	bash $(PIPE_DIR)/run_gen_gridsfm_data.sh \
-	  $(N_WORKERS) $(OUTPUT_DIR)/scenarios $(GRID_LIST)
+	  $(N_WORKERS) $(OUTPUT_DIR)/scenarios $(GRID_LIST) "$$CPU_RANGE"
 
 .PHONY: local-verify
 local-verify: ## [local] Verify: Round-trip check all scenarios for STATE/HOUR

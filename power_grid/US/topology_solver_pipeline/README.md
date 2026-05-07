@@ -239,6 +239,7 @@ All variables can be overridden on the command line:
 | `HOUR` | `16h` | Operating hour (`16h` peak or `04h` off-peak) |
 | `N_PER_MODE` | `1` | Scenarios per perturbation mode |
 | `N_WORKERS` | `2` | Julia worker processes for scenario generation |
+| `CPU_RANGE` | *(auto: `0-$(nproc-1)`)* | CPU core range for `taskset` pinning in `local-gen-bulk` (e.g. `0-7`) |
 | `GRID_LIST` | *(required for gen-bulk)* | Grid list file for bulk generation |
 | `PYG_FILE` | *(required for verify-one)* | Scenario file path relative to `OUTPUT_DIR` |
 
