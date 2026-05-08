@@ -10,6 +10,7 @@ Model checkpoints and power grid datasets are available on HuggingFace:
 [microsoft/gridsfm](https://huggingface.co/collections/microsoft/gridsfm).
 Use the instructions below to install our loaders and facilitate data loading.
 
+
 ## Repository structure
 
 ```
@@ -30,6 +31,8 @@ grids. Details will be added once the model artifacts and inference code are
 available.
 
 ## `power_grid/` — Grid data and processing pipeline
+
+> **Tested OS:** Ubuntu 24.04 and macOS 26.4.1.
 
 ### Typical workflow
 
