@@ -234,6 +234,10 @@ def compute_dc_prior(
         bus_idx = s['bus_idx']
         n_bus_g = s['n_bus_g']
         mask = s['mask']
+        P_g = s['P_g']
+        slack_local = s['slack_local']
+        edge_count = s['edge_count']
+        g = s['g']
 
         n_nonfinite = int(np.sum(~np.isfinite(theta_red)))
         if n_nonfinite > 0:

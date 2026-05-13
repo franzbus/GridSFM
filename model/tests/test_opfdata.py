@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from gridsfm import load_opfdata, predict, load_model
+from gridsfm import load_pyg_json, load_opfdata, predict, load_model
 
 ROOT = Path(__file__).resolve().parent.parent
 
