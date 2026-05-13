@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import math
 
-import pytest
 import torch
 
 from gridsfm.model import GridTransformerBackbone
