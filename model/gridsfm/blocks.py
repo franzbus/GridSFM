@@ -9,7 +9,7 @@ from torch_geometric.data import HeteroData
 from torch_geometric.nn import HeteroConv, SAGEConv
 
 from .schema import (
-    BUS_VMIN_IDX, BUS_VMAX_IDX, BUS_TYPE_IDX,
+    BUS_VMAX_IDX, BUS_TYPE_IDX,
     GEN_PMIN_IDX, GEN_PMAX_IDX, GEN_QMIN_IDX, GEN_QMAX_IDX,
     GEN_CP2_IDX, GEN_CP1_IDX, GEN_CP0_IDX,
     AC_LINE_BFR_IDX, AC_LINE_BTO_IDX, AC_LINE_R_IDX, AC_LINE_X_IDX,
@@ -18,7 +18,6 @@ from .schema import (
 from .signed_incidence import SignedIncidenceConv
 
 EdgeType = Tuple[str, str, str]
-_G_CTX_DIM = 8
 
 DEFAULT_INPUT_DIMS = {
     'bus':       4 + 5 + 3 + 4,
