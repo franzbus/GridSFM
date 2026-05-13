@@ -21,7 +21,7 @@ License: top-level `LICENSE` covers this package.
 
 ## Install
 
-Tested on Ubuntu 22.04 / 24.04 and macOS 14+. Python 3.10+, primary CI on 3.12.
+Tested on Ubuntu 22.04 / 24.04 and macOS 26+. Python 3.10+, primary CI on 3.12.
 
 ```bash
 cd model
