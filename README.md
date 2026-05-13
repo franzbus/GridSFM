@@ -115,13 +115,12 @@ If you use the power grid data or pipeline, please cite:
 
 If you use the GridSFM neural surrogate model (`model/`), please cite:
 
-<!-- TODO: replace with the GridSFM model paper bibtex once the paper is public. -->
-
 ```bibtex
-@article{TODO_gridsfm_model,
-  title   = {TODO: GridSFM model paper title},
-  author  = {TODO},
-  year    = {TODO},
-  note    = {Microsoft Research, citation to be added upon publication}
+@unpublished{yang2026gridsfm,
+  author   = {Yang, Weiwei and Britto Mattos Lima, Andrea and Spina, Thiago V. and Fowers, Spencer and Zhang, Baosen and White, Chris},
+  title    = {GridSFM: A Foundation Model for AC Optimal Power Flow},
+  year     = {2026},
+  month    = {May},
+  url      = {https://www.microsoft.com/en-us/research/publication/gridsfm-a-foundation-model-for-ac-optimal-power-flow/}
 }
 ```
