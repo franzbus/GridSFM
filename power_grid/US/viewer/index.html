@@ -58,6 +58,7 @@
   .badge-green  { background:rgba(52,211,153,0.15); color:var(--green); }
   .badge-orange { background:rgba(251,146,60,0.15); color:var(--orange); }
   .badge-red    { background:rgba(248,113,113,0.15); color:var(--red); }
+  .badge-ml     { background:rgba(232,121,249,0.15); color:#e879f9; }
   .legend { position:absolute; bottom:20px; right:20px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 14px; z-index:999; font-size:11px; max-width:220px; }
   .legend-title { font-weight:600; margin-bottom:6px; font-size:12px; }
   .legend-item { display:flex; align-items:center; gap:6px; margin-bottom:3px; }
@@ -243,15 +244,17 @@ function hourSelectHTML(){
   return h+'</select>';
 }
 // OPF mode toggle
-function opfToggleHTML(hasAC){
-  var dc=currentOPFMode==='dc',ac=currentOPFMode==='ac';
+function opfToggleHTML(hasAC,hasGSFM){
+  var dc=currentOPFMode==='dc',ac=currentOPFMode==='ac',gs=currentOPFMode==='gridsfm';
   var onStyle='font-size:11px;padding:2px 10px;border-radius:4px;font-weight:600;cursor:pointer;border:none;';
   var offStyle=onStyle+'background:transparent;color:var(--text2);opacity:0.6;';
   var dcOn=onStyle+'background:#1e3a5f;color:#60a5fa;';
   var acOn=onStyle+'background:#1a3a2a;color:#4ade80;';
+  var gsOn=onStyle+'background:#3a1a3a;color:#e879f9;';
   var h=' <span style="display:inline-flex;gap:2px;vertical-align:middle;margin-left:8px;background:var(--surface2);border-radius:6px;padding:2px">';
   h+='<button class="opf-toggle-btn" data-opfmode="dc" style="'+(dc?dcOn:offStyle)+'">DC</button>';
   h+='<button class="opf-toggle-btn" data-opfmode="ac" style="'+(ac?acOn:offStyle)+(!hasAC?'opacity:0.3;cursor:not-allowed;':'')+'">AC</button>';
+  h+='<button class="opf-toggle-btn" data-opfmode="gridsfm" style="'+(gs?gsOn:offStyle)+(!hasGSFM?'opacity:0.3;cursor:not-allowed;':'')+'" title="GridSFM ML surrogate">GSFM</button>';
   h+='</span>';
   return h;
 }
@@ -466,21 +469,23 @@ async function renderSummary(gen){
   availableHours.forEach(function(hr){
     fetches.push(
       fetchJSON('/data/'+hr.value+'/'+currentState+'_dc_results.json',60000,gen).catch(function(){return null}).then(function(r){hourResults[hr.value+'_dc']=r}),
-      fetchJSON('/data/'+hr.value+'/'+currentState+'_ac_results.json',60000,gen).catch(function(){return null}).then(function(r){hourResults[hr.value+'_ac']=r})
+      fetchJSON('/data/'+hr.value+'/'+currentState+'_ac_results.json',60000,gen).catch(function(){return null}).then(function(r){hourResults[hr.value+'_ac']=r}),
+      fetchJSON('/data/'+hr.value+'/'+currentState+'_gridsfm_results.json',60000,gen).catch(function(){return null}).then(function(r){hourResults[hr.value+'_gridsfm']=r})
     );
   });
   await Promise.all(fetches);
   if(stale(gen))return;
 
-  function badge(st){if(st==='LOCALLY_SOLVED'||st==='OPTIMAL')return'<span class="badge badge-green">&#10003; SOLVED</span>';if(st==='ALMOST_LOCALLY_SOLVED')return'<span class="badge badge-orange">&asymp; APPROX</span>';return'<span class="badge badge-red">&#10007; '+esc(st)+'</span>'}
+  function badge(st){if(st==='LOCALLY_SOLVED'||st==='OPTIMAL')return'<span class="badge badge-green">&#10003; SOLVED</span>';if(st==='ALMOST_LOCALLY_SOLVED')return'<span class="badge badge-orange">&asymp; APPROX</span>';if(st==='ML_PREDICTION')return'<span class="badge badge-ml">&#9881; ML PREDICTION</span>';return'<span class="badge badge-red">&#10007; '+esc(st)+'</span>'}
   function lvl(l){return l===6?'AC1':'L'+l}
 
   var rows='';
   availableHours.forEach(function(hr){
-    [['DC',hourResults[hr.value+'_dc']],['AC',hourResults[hr.value+'_ac']]].forEach(function(p){
+    [['DC',hourResults[hr.value+'_dc']],['AC',hourResults[hr.value+'_ac']],['GSFM',hourResults[hr.value+'_gridsfm']]].forEach(function(p){
       var f=p[0],r=p[1];if(!r)return;
       var cost=r.objective||0;var rLoad=r.total_load_mw||totLModel;var mwh=rLoad>0?cost/rLoad:0;
-      rows+='<tr><td>'+esc(hr.label)+'</td><td><b>'+f+'</b></td><td>'+badge(r.termination_status||'')+'</td><td>'+lvl(r.relaxation_level!=null?r.relaxation_level:-1)+'</td><td>'+fmtM(cost)+'</td><td>'+fmtM(mwh)+'</td><td>'+fmt(Math.round(r.total_gen_mw||0))+' MW</td><td>'+fmt(Math.round(r.total_load_mw||0))+' MW</td><td>'+((r.solve_time||0).toFixed(1))+'s</td></tr>';
+      var lvlStr=(f==='GSFM')?(r.relaxation_label||'ML'):lvl(r.relaxation_level!=null?r.relaxation_level:-1);
+      rows+='<tr><td>'+esc(hr.label)+'</td><td><b>'+f+'</b></td><td>'+badge(r.termination_status||'')+'</td><td>'+esc(lvlStr)+'</td><td>'+fmtM(cost)+'</td><td>'+fmtM(mwh)+'</td><td>'+fmt(Math.round(r.total_gen_mw||0))+' MW</td><td>'+fmt(Math.round(r.total_load_mw||0))+' MW</td><td>'+((r.solve_time||0).toFixed(1))+'s</td></tr>';
     });
   });
 
@@ -504,15 +509,17 @@ async function renderFlows(gen){
   var results=await Promise.all([
     fetchModel(gen),
     fetchJSON(resultsDir()+currentState+'_dc_results.json',60000,gen).catch(function(){return null}),
-    fetchJSON(resultsDir()+currentState+'_ac_results.json',60000,gen).catch(function(){return null})
+    fetchJSON(resultsDir()+currentState+'_ac_results.json',60000,gen).catch(function(){return null}),
+    fetchJSON(resultsDir()+currentState+'_gridsfm_results.json',60000,gen).catch(function(){return null})
   ]);
   if(stale(gen))return;
-  var dm=results[0],dcSol=results[1],acSol=results[2];
+  var dm=results[0],dcSol=results[1],acSol=results[2],gsSol=results[3];
   enrichBusNames(dm);
   var hasAC=!!(acSol&&acSol.solution);
-  var sol=(currentOPFMode==='ac'&&hasAC)?acSol:dcSol;
+  var hasGSFM=!!(gsSol&&gsSol.solution);
+  var sol=(currentOPFMode==='ac'&&hasAC)?acSol:(currentOPFMode==='gridsfm'&&hasGSFM)?gsSol:dcSol;
   if(!sol||!sol.solution){
-    document.getElementById('infoBar').innerHTML='<h2>Economic Dispatch \u00b7 '+stateLabel()+' ('+hourLabel()+')'+hourSelectHTML()+opfToggleHTML(hasAC)+'</h2><div class="error-banner">No results available.</div>';return;
+    document.getElementById('infoBar').innerHTML='<h2>Economic Dispatch \u00b7 '+stateLabel()+' ('+hourLabel()+')'+hourSelectHTML()+opfToggleHTML(hasAC,hasGSFM)+'</h2><div class="error-banner">No results available.</div>';return;
   }
 
   var sc=(dm.per_unit===true)?(dm.baseMVA||100):1;
@@ -540,7 +547,7 @@ async function renderFlows(gen){
   var busLoad={};Object.values(dm.load||{}).forEach(function(l){var b=String(l.load_bus||'');busLoad[b]=(busLoad[b]||0)+(l.pd||0)*sc});
 
   document.getElementById('infoBar').innerHTML=
-    '<h2>Economic Dispatch \u00b7 '+stateLabel()+' ('+hourLabel()+')'+hourSelectHTML()+opfToggleHTML(hasAC)+'</h2>'+
+    '<h2>Economic Dispatch \u00b7 '+stateLabel()+' ('+hourLabel()+')'+hourSelectHTML()+opfToggleHTML(hasAC,hasGSFM)+'</h2>'+
     '<div class="stats-grid">'+
       '<div class="stat-card"><div class="stat-label">Total Generation</div><div class="stat-value">'+fmt(Math.round(totGen))+' MW</div></div>'+
       '<div class="stat-card"><div class="stat-label">Total Load</div><div class="stat-value">'+fmt(Math.round(totLoad))+' MW</div></div>'+
@@ -605,16 +612,18 @@ async function renderCongestion(gen){
   var results=await Promise.all([
     fetchModel(gen),
     fetchJSON(resultsDir()+currentState+'_dc_results.json',60000,gen).catch(function(){return null}),
-    fetchJSON(resultsDir()+currentState+'_ac_results.json',60000,gen).catch(function(){return null})
+    fetchJSON(resultsDir()+currentState+'_ac_results.json',60000,gen).catch(function(){return null}),
+    fetchJSON(resultsDir()+currentState+'_gridsfm_results.json',60000,gen).catch(function(){return null})
   ]);
   if(stale(gen))return;
-  var dm=results[0],dcSol=results[1],acSol=results[2];
+  var dm=results[0],dcSol=results[1],acSol=results[2],gsSol=results[3];
   enrichBusNames(dm);
   var hasAC=!!(acSol&&acSol.solution);
-  var sol=(currentOPFMode==='ac'&&hasAC)?acSol:dcSol;
-  var isAC=sol===acSol;
+  var hasGSFM=!!(gsSol&&gsSol.solution);
+  var sol=(currentOPFMode==='ac'&&hasAC)?acSol:(currentOPFMode==='gridsfm'&&hasGSFM)?gsSol:dcSol;
+  var isAC=sol===acSol||sol===gsSol;
   if(!sol||!sol.solution){
-    document.getElementById('infoBar').innerHTML='<h2>Line Congestion \u00b7 '+stateLabel()+' ('+hourLabel()+')'+hourSelectHTML()+opfToggleHTML(hasAC)+'</h2><div class="error-banner">No results available.</div>';return;
+    document.getElementById('infoBar').innerHTML='<h2>Line Congestion \u00b7 '+stateLabel()+' ('+hourLabel()+')'+hourSelectHTML()+opfToggleHTML(hasAC,hasGSFM)+'</h2><div class="error-banner">No results available.</div>';return;
   }
 
   var sc=(dm.per_unit===true)?(dm.baseMVA||100):1;
@@ -666,7 +675,7 @@ async function renderCongestion(gen){
     '<table class="results-table" style="font-size:11px"><tr><th>Branch</th><th>From</th><th>To</th><th style="text-align:right">Flow</th><th style="text-align:right">Rating</th><th style="text-align:right">Loading</th><th>Info</th></tr>'+topRows+'</table>';
 
   document.getElementById('infoBar').innerHTML=
-    '<h2>Line Congestion \u00b7 '+stateLabel()+' ('+hourLabel()+')'+hourSelectHTML()+opfToggleHTML(hasAC)+'</h2>'+
+    '<h2>Line Congestion \u00b7 '+stateLabel()+' ('+hourLabel()+')'+hourSelectHTML()+opfToggleHTML(hasAC,hasGSFM)+'</h2>'+
     '<div class="detail-tabs">'+detailTabHTML(0,'Map','map',true)+detailTabHTML(1,'Data','data',false)+'</div>'+
     detailPanelHTML(0,mapContent,0)+detailPanelHTML(1,dataContent,0);
   bindDetailTabs();
