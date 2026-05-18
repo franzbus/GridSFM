@@ -245,7 +245,10 @@ function hourSelectHTML(){
 }
 // OPF mode toggle
 function opfToggleHTML(hasAC,hasGSFM){
-  var dc=currentOPFMode==='dc',ac=currentOPFMode==='ac',gs=currentOPFMode==='gridsfm';
+  // a mode only renders as active if its data is actually present; otherwise
+  // the renderer falls back to DC and the DC button should reflect that.
+  var ac=(currentOPFMode==='ac'&&hasAC),gs=(currentOPFMode==='gridsfm'&&hasGSFM);
+  var dc=!(ac||gs);
   var onStyle='font-size:11px;padding:2px 10px;border-radius:4px;font-weight:600;cursor:pointer;border:none;';
   var offStyle=onStyle+'background:transparent;color:var(--text2);opacity:0.6;';
   var dcOn=onStyle+'background:#1e3a5f;color:#60a5fa;';
@@ -253,8 +256,8 @@ function opfToggleHTML(hasAC,hasGSFM){
   var gsOn=onStyle+'background:#3a1a3a;color:#e879f9;';
   var h=' <span style="display:inline-flex;gap:2px;vertical-align:middle;margin-left:8px;background:var(--surface2);border-radius:6px;padding:2px">';
   h+='<button class="opf-toggle-btn" data-opfmode="dc" style="'+(dc?dcOn:offStyle)+'">DC</button>';
-  h+='<button class="opf-toggle-btn" data-opfmode="ac" style="'+(ac?acOn:offStyle)+(!hasAC?'opacity:0.3;cursor:not-allowed;':'')+'">AC</button>';
-  h+='<button class="opf-toggle-btn" data-opfmode="gridsfm" style="'+(gs?gsOn:offStyle)+(!hasGSFM?'opacity:0.3;cursor:not-allowed;':'')+'" title="GridSFM ML surrogate">GSFM</button>';
+  h+='<button class="opf-toggle-btn" data-opfmode="ac"'+(!hasAC?' data-disabled="1"':'')+' style="'+(ac?acOn:offStyle)+(!hasAC?'opacity:0.3;cursor:not-allowed;':'')+'">AC</button>';
+  h+='<button class="opf-toggle-btn" data-opfmode="gridsfm"'+(!hasGSFM?' data-disabled="1"':'')+' style="'+(gs?gsOn:offStyle)+(!hasGSFM?'opacity:0.3;cursor:not-allowed;':'')+'" title="GridSFM ML surrogate">GSFM</button>';
   h+='</span>';
   return h;
 }
@@ -338,7 +341,7 @@ document.addEventListener('DOMContentLoaded',async function(){
   });
   document.getElementById('infoBar').addEventListener('click',function(e){
     var btn=e.target.closest('.opf-toggle-btn');
-    if(btn){var mode=btn.dataset.opfmode;if(mode!==currentOPFMode){currentOPFMode=mode;renderStep()}}
+    if(btn){if(btn.dataset.disabled==='1')return;var mode=btn.dataset.opfmode;if(mode!==currentOPFMode){currentOPFMode=mode;renderStep()}}
   });
   document.getElementById('infoBar').addEventListener('change',function(e){
     if(e.target.id!=='hourSelect'){return}
@@ -621,7 +624,8 @@ async function renderCongestion(gen){
   var hasAC=!!(acSol&&acSol.solution);
   var hasGSFM=!!(gsSol&&gsSol.solution);
   var sol=(currentOPFMode==='ac'&&hasAC)?acSol:(currentOPFMode==='gridsfm'&&hasGSFM)?gsSol:dcSol;
-  var isAC=sol===acSol||sol===gsSol;
+  var useApparentPower=(sol===acSol||sol===gsSol);
+  var formLabel=(sol===gsSol)?'GSFM':(sol===acSol)?'AC':'DC';
   if(!sol||!sol.solution){
     document.getElementById('infoBar').innerHTML='<h2>Line Congestion \u00b7 '+stateLabel()+' ('+hourLabel()+')'+hourSelectHTML()+opfToggleHTML(hasAC,hasGSFM)+'</h2><div class="error-banner">No results available.</div>';return;
   }
@@ -634,7 +638,7 @@ async function renderCongestion(gen){
   Object.keys(sBr).forEach(function(bid){
     var flow=sBr[bid],model=dBr[bid];if(!model)return;
     var pf=flow.pf||0,qf=flow.qf||0;
-    var sf=isAC?Math.sqrt(pf*pf+qf*qf):Math.abs(pf);
+    var sf=useApparentPower?Math.sqrt(pf*pf+qf*qf):Math.abs(pf);
     var rateA=model.rate_a||0;if(rateA<=0)return;
     var ratio=sf/rateA;
     var fBus=dB[String(model.f_bus)]||{},tBus=dB[String(model.t_bus)]||{};
@@ -689,7 +693,7 @@ async function renderCongestion(gen){
     styleFn:function(bid){var c=congMap[bid];var r=c?c.ratio:0;return{color:congColor(r),weight:r>=0.2?3:1.5,opacity:r>=0.2?0.9:0.3}},
     tooltipFn:function(bid,br){
       var c=congMap[bid];if(!c)return'<b>Branch '+esc(bid)+'</b>';
-      var unit=isAC?'MVA':'MW';
+      var unit=useApparentPower?'MVA':'MW';
       return'<b>Branch '+esc(bid)+'</b><br>'+esc(c.fName)+' \u2194 '+esc(c.tName)+'<br>Flow: '+c.flowMVA.toFixed(1)+' '+unit+'<br>Rating: '+c.ratingMVA.toFixed(0)+' '+unit+'<br><b>Loading: '+(c.ratio*100).toFixed(1)+'%</b>';
     }
   });
@@ -711,7 +715,7 @@ async function renderCongestion(gen){
     '<div class="legend-item"><span class="legend-color" style="background:#facc15;height:2px"></span>20\u201349%</div>'+
     '<div class="legend-item"><span class="legend-color" style="background:#555;height:1px"></span>&lt;20%</div>'+
     (Object.keys(dDC).length?'<div class="legend-item" style="margin-top:4px"><span class="legend-color" style="background:#a855f7;height:4px"></span>HVDC</div>':'')+
-    '<div style="margin-top:6px;font-size:10px;color:var(--text2)">'+(isAC?'AC':'DC')+' formulation</div>';
+    '<div style="margin-top:6px;font-size:10px;color:var(--text2)">'+formLabel+' formulation</div>';
   el.style.display='block';
   hideLoading();
 }

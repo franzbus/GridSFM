@@ -22,7 +22,7 @@ from gridsfm.schema import GEN_CP0_IDX, GEN_CP1_IDX, GEN_CP2_IDX
 ROOT = Path(__file__).parent.parent
 
 
-def build_viewer_json(sample_path: Path, pred: dict, sample_obj: dict, t_solve: float) -> dict:
+def build_viewer_json(pred: dict, sample_obj: dict, t_solve: float) -> dict:
     md = sample_obj["metadata"]
     bus_id_map = md["bus_id_map"]                # row -> PM bus id
     gen_id_map = md["gen_id_map"]                # row -> PM gen id
@@ -55,20 +55,34 @@ def build_viewer_json(sample_path: Path, pred: dict, sample_obj: dict, t_solve: 
             "pg_cost": pg_costs[row],
         }
 
-    # branch solution: predict() concatenates ac_line then transformer flows
+    # branch solution: predict() concatenates flow tensors in the order given by
+    # pred['flow_edge_types'] / pred['flow_edge_counts']. Build the matching ID
+    # list from metadata so a future change in concat order is caught loudly
+    # rather than silently mis-mapping per-branch flows.
     n_ac = len(ac_ids)
     n_tr = len(tr_ids)
     branch_sol = {}
     Pij = pred["Pij"].tolist(); Qij = pred["Qij"].tolist()
     Pji = pred["Pji"].tolist(); Qji = pred["Qji"].tolist()
-    # sanity check: predict's flow_edge_counts should be [n_ac, n_tr] in order
-    counts = pred.get("flow_edge_counts", [])
-    types  = pred.get("flow_edge_types", [])
-    if counts and (counts[0] != n_ac or (len(counts) > 1 and counts[1] != n_tr)):
-        # fall back to lengths if order differs
-        print(f"[warn] flow_edge_counts={counts} types={types} differs from "
-              f"metadata (ac={n_ac}, tr={n_tr}); writing in predict() order.")
-    all_ids = list(ac_ids) + list(tr_ids)
+    counts = list(pred.get("flow_edge_counts", []) or [])
+    types  = list(pred.get("flow_edge_types",  []) or [])
+    ID_BY_TYPE = {"ac_line": list(ac_ids), "transformer": list(tr_ids)}
+    EXPECTED   = {"ac_line": n_ac, "transformer": n_tr}
+    if types and counts:
+        if len(types) != len(counts):
+            raise ValueError(f"flow_edge_types={types} length differs from flow_edge_counts={counts}")
+        all_ids = []
+        for t, c in zip(types, counts):
+            if t not in ID_BY_TYPE:
+                raise ValueError(f"Unknown flow_edge_type {t!r}; sample metadata has ac_line+transformer only")
+            if c != EXPECTED[t]:
+                raise ValueError(f"flow_edge_counts[{t}]={c} does not match metadata ({EXPECTED[t]})")
+            all_ids.extend(ID_BY_TYPE[t])
+    else:
+        # legacy / minimal predict output: assume canonical ac_line then transformer
+        all_ids = list(ac_ids) + list(tr_ids)
+    if len(all_ids) != len(Pij):
+        raise ValueError(f"Flow count mismatch: {len(all_ids)} branch ids vs {len(Pij)} predicted flows")
     for i, pm_id in enumerate(all_ids):
         branch_sol[str(pm_id)] = {
             "pf": Pij[i], "qf": Qij[i],
@@ -132,7 +146,7 @@ def main():
     t_solve = time.perf_counter() - t0
     print(f"  done in {t_solve:.2f}s  feas={pred['feas']:.3f}")
 
-    out = build_viewer_json(args.sample, pred, sample_obj, t_solve)
+    out = build_viewer_json(pred, sample_obj, t_solve)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with open(args.out, "w") as f:
         json.dump(out, f)
