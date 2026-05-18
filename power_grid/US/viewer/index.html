@@ -354,7 +354,7 @@ function restoreOrFitBuses(buses){
   if(savedView[currentState]){map.setView(savedView[currentState].center,savedView[currentState].zoom,{animate:false});return}
   var minLat=90,maxLat=-90,minLon=180,maxLon=-180,found=false;
   Object.values(buses).forEach(function(v){if(v.lat!=null){if(v.lat<minLat)minLat=v.lat;if(v.lat>maxLat)maxLat=v.lat;if(v.lon<minLon)minLon=v.lon;if(v.lon>maxLon)maxLon=v.lon;found=true}});
-  if(found)map.fitBounds([[minLat,minLon],[maxLat,maxLon]],{padding:[30,30]});
+  if(found)map.fitBounds([[minLat,minLon],[maxLat,maxLon]],{padding:[30,30],animate:false});
 }
 
 // ======= Step dispatcher =======
@@ -720,7 +720,7 @@ async function renderCongestion(gen){
 function fitBuses(buses){
   var minLat=90,maxLat=-90,minLon=180,maxLon=-180,found=false;
   Object.values(buses).forEach(function(v){if(v.lat!=null){if(v.lat<minLat)minLat=v.lat;if(v.lat>maxLat)maxLat=v.lat;if(v.lon<minLon)minLon=v.lon;if(v.lon>maxLon)maxLon=v.lon;found=true}});
-  if(found)map.fitBounds([[minLat,minLon],[maxLat,maxLon]],{padding:[30,30]});
+  if(found)map.fitBounds([[minLat,minLon],[maxLat,maxLon]],{padding:[30,30],animate:false});
 }
 </script>
 </body>
