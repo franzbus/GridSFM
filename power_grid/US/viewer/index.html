@@ -256,8 +256,8 @@ function opfToggleHTML(hasAC,hasGSFM){
   var gsOn=onStyle+'background:#3a1a3a;color:#e879f9;';
   var h=' <span style="display:inline-flex;gap:2px;vertical-align:middle;margin-left:8px;background:var(--surface2);border-radius:6px;padding:2px">';
   h+='<button class="opf-toggle-btn" data-opfmode="dc" style="'+(dc?dcOn:offStyle)+'">DC</button>';
-  h+='<button class="opf-toggle-btn" data-opfmode="ac"'+(!hasAC?' data-disabled="1"':'')+' style="'+(ac?acOn:offStyle)+(!hasAC?'opacity:0.3;cursor:not-allowed;':'')+'">AC</button>';
-  h+='<button class="opf-toggle-btn" data-opfmode="gridsfm"'+(!hasGSFM?' data-disabled="1"':'')+' style="'+(gs?gsOn:offStyle)+(!hasGSFM?'opacity:0.3;cursor:not-allowed;':'')+'" title="GridSFM ML surrogate">GSFM</button>';
+  h+='<button class="opf-toggle-btn" data-opfmode="ac"'+(!hasAC?' disabled aria-disabled="true"':'')+' style="'+(ac?acOn:offStyle)+(!hasAC?'opacity:0.3;cursor:not-allowed;':'')+'">AC</button>';
+  h+='<button class="opf-toggle-btn" data-opfmode="gridsfm"'+(!hasGSFM?' disabled aria-disabled="true"':'')+' style="'+(gs?gsOn:offStyle)+(!hasGSFM?'opacity:0.3;cursor:not-allowed;':'')+'" title="GridSFM ML surrogate">GSFM</button>';
   h+='</span>';
   return h;
 }
@@ -341,7 +341,7 @@ document.addEventListener('DOMContentLoaded',async function(){
   });
   document.getElementById('infoBar').addEventListener('click',function(e){
     var btn=e.target.closest('.opf-toggle-btn');
-    if(btn){if(btn.dataset.disabled==='1')return;var mode=btn.dataset.opfmode;if(mode!==currentOPFMode){currentOPFMode=mode;renderStep()}}
+    if(btn){if(btn.disabled)return;var mode=btn.dataset.opfmode;if(mode!==currentOPFMode){currentOPFMode=mode;renderStep()}}
   });
   document.getElementById('infoBar').addEventListener('change',function(e){
     if(e.target.id!=='hourSelect'){return}
