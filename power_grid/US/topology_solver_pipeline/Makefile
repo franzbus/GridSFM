@@ -330,11 +330,12 @@ local-gen-bulk: ## [local] Stage 3b: Bulk scenario generation from GRID_LIST (mu
 	if [ -z "$$CPU_RANGE" ]; then \
 	  if command -v nproc >/dev/null 2>&1; then \
 	    ncpu=$$(nproc); \
-	  elif command -v sysctl >/dev/null 2>&1 && sysctl -n hw.logicalcpu >/dev/null 2>&1; then \
-	    ncpu=$$(sysctl -n hw.logicalcpu); \
+	  elif command -v sysctl >/dev/null 2>&1; then \
+	    ncpu=$$(sysctl -n hw.logicalcpu 2>/dev/null || true); \
 	  else \
 	    ncpu=$$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1); \
 	  fi; \
+	  case "$$ncpu" in ''|*[!0-9]*|0) ncpu=1 ;; esac; \
 	  CPU_RANGE="0-$$((ncpu - 1))"; \
 	fi; \
 	bash $(PIPE_DIR)/run_gen_gridsfm_data.sh \
