@@ -20,12 +20,11 @@ Hugging Face: [microsoft/gridsfm](https://huggingface.co/collections/microsoft/g
 ```
 GridSFM/
 ├── model/                  # Neural surrogate model loading & inference
-│   ├── gridsfm/            # inference package (model, transforms, helpers)
+│   ├── gridsfm/            # inference package + gridsfm.hf_util HuggingFace loader
 │   ├── samples/            # 53 base scenarios (.pyg.json); see samples/README.md
 │   ├── examples/           # infer_samples, opfdata
 │   └── tests/              # pytest suite
 └── power_grid/
-    ├── hf_util/            # HuggingFace dataset loader
     └── US/
         ├── topology_solver_pipeline/   # Raw topology → solved scenarios
         └── viewer/                     # Browser-based grid data viewer
@@ -49,18 +48,16 @@ See [model/README.md](model/README.md) for install, checkpoint download, output 
 
 ### Typical workflow
 
-1. **[Download the dataset](#power_gridhf_util--huggingface-dataset-loader)** — install the HuggingFace loader and fetch the power grid models to a local directory.
+1. **[Download the dataset](#gridsfmhf_util--huggingface-dataset-loader)** — use the HuggingFace loader bundled with the `gridsfm` package to fetch the power grid models and OPF results to a local directory.
 2. **[Inspect the data](#power_gridusviewer--data-viewer)** — launch the browser-based viewer to explore network topology and OPF results.
 3. **[Run the topology solver pipeline](#power_gridustopology_solver_pipeline--raw-topology--solved-scenarios)** — process raw topologies into solved AC-OPF scenarios for model training.
 
-### `power_grid/hf_util/` — HuggingFace dataset loader
+### `gridsfm.hf_util` — HuggingFace dataset loader
 
 A Python utility (`gridsfm_pg_loader.py`) for downloading and loading
-GridSFM US power grid models and OPF results from HuggingFace Hub.
-
-```bash
-pip install ./power_grid/hf_util
-```
+GridSFM US power grid models and OPF results from HuggingFace Hub. Shipped
+as part of the main `gridsfm` package — no separate `hf_util` install
+needed; install `gridsfm` itself per [model/README.md#install](model/README.md#install).
 
 ```python
 from gridsfm.hf_util import GridSFM_PG_Loader
@@ -70,7 +67,7 @@ loader = GridSFM_PG_Loader("microsoft/GridSFM_US_power_grid",
 model  = loader.load_model("texas", hour="16h")
 ```
 
-See the [hf_util README](power_grid/hf_util/README.md) for full usage.
+See [model/gridsfm/hf_util/](model/gridsfm/hf_util/) for the loader source.
 
 ### `power_grid/US/viewer/` — Data viewer
 
