@@ -38,6 +38,16 @@ export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 
-taskset -c "$CPU_RANGE" julia --project="$JULIA_PROJECT" \
-    "$SCRIPT_DIR/gen_perturbed_data.jl" \
-    "$GRID_LIST" "$N_PROC" "$OUT_ROOT"
+# CPU pinning via taskset is Linux-only. On platforms without taskset
+# (notably macOS, which has no per-process CPU affinity API), fall back
+# to running julia directly — CPU_RANGE is then informational only.
+if command -v taskset >/dev/null 2>&1; then
+    taskset -c "$CPU_RANGE" julia --project="$JULIA_PROJECT" \
+        "$SCRIPT_DIR/gen_perturbed_data.jl" \
+        "$GRID_LIST" "$N_PROC" "$OUT_ROOT"
+else
+    echo "Warning: 'taskset' not found; skipping CPU pinning (CPU_RANGE='$CPU_RANGE' ignored)." >&2
+    julia --project="$JULIA_PROJECT" \
+        "$SCRIPT_DIR/gen_perturbed_data.jl" \
+        "$GRID_LIST" "$N_PROC" "$OUT_ROOT"
+fi

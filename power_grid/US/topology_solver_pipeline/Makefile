@@ -38,6 +38,12 @@ N_PER_MODE    ?= 1
 # Number of Julia worker processes for scenario generation
 N_WORKERS     ?= 2
 
+# CPU core range for taskset pinning in bulk scenario generation (e.g. 0-7).
+# Leave empty to auto-detect at runtime as 0-(N-1), where N is the number of
+# logical CPUs (nproc on Linux, sysctl hw.logicalcpu on macOS). Note: taskset
+# is Linux-only; on macOS this value is informational and pinning is skipped.
+CPU_RANGE     ?=
+
 # Grid list file for bulk generation (one "<solvable.json> <n_per_mode>" per line)
 GRID_LIST     ?=
 
@@ -320,8 +326,20 @@ local-perturb: ## [local] Stage 3b: Generate perturbed scenarios (single state)
 local-gen-bulk: ## [local] Stage 3b: Bulk scenario generation from GRID_LIST (multi-grid)
 	$(if $(GRID_LIST),,$(error GRID_LIST is not set. Create a grid list file and pass GRID_LIST=/path/to/grids.txt))
 	@mkdir -p $(OUTPUT_DIR)/scenarios
+	CPU_RANGE="$(CPU_RANGE)"; \
+	if [ -z "$$CPU_RANGE" ]; then \
+	  if command -v nproc >/dev/null 2>&1; then \
+	    ncpu=$$(nproc); \
+	  elif command -v sysctl >/dev/null 2>&1; then \
+	    ncpu=$$(sysctl -n hw.logicalcpu 2>/dev/null || true); \
+	  else \
+	    ncpu=$$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1); \
+	  fi; \
+	  case "$$ncpu" in ''|*[!0-9]*|0) ncpu=1 ;; esac; \
+	  CPU_RANGE="0-$$((ncpu - 1))"; \
+	fi; \
 	bash $(PIPE_DIR)/run_gen_gridsfm_data.sh \
-	  $(N_WORKERS) $(OUTPUT_DIR)/scenarios $(GRID_LIST)
+	  $(N_WORKERS) $(OUTPUT_DIR)/scenarios $(GRID_LIST) "$$CPU_RANGE"
 
 .PHONY: local-verify
 local-verify: ## [local] Verify: Round-trip check all scenarios for STATE/HOUR
