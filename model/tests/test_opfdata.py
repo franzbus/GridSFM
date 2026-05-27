@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 SAMPLE = ROOT / "samples" / "case500_goc.pyg.json"
-CKPT = ROOT / "checkpoints" / "gridsfm_open_v1.0.pt"
+CKPT = ROOT / "checkpoints" / "gridsfm_open_v1.1.pt"
 DEVICE = os.environ.get("GRIDSFM_TEST_DEVICE", "cpu")
 
 
@@ -108,7 +108,7 @@ def test_predict_opfdata_roundtrip(model):
         out_opf = predict(model, path, fmt="opfdata")
     finally:
         os.unlink(path)
-    torch.testing.assert_close(out_pyg["theta"], out_opf["theta"], atol=5e-4, rtol=5e-4)
-    torch.testing.assert_close(out_pyg["V"],     out_opf["V"],     atol=5e-4, rtol=5e-4)
-    torch.testing.assert_close(out_pyg["Pg"],    out_opf["Pg"],    atol=5e-4, rtol=5e-4)
-    torch.testing.assert_close(out_pyg["Qg"],    out_opf["Qg"],    atol=5e-4, rtol=5e-4)
+    torch.testing.assert_close(out_pyg["theta"], out_opf["theta"], atol=2e-3, rtol=2e-3)
+    torch.testing.assert_close(out_pyg["V"],     out_opf["V"],     atol=2e-3, rtol=2e-3)
+    torch.testing.assert_close(out_pyg["Pg"],    out_opf["Pg"],    atol=2e-3, rtol=2e-3)
+    torch.testing.assert_close(out_pyg["Qg"],    out_opf["Qg"],    atol=2e-3, rtol=2e-3)

@@ -11,10 +11,6 @@ from torch_geometric.data import HeteroData
 from .blocks import (
     _G_CTX_DIM,
     EdgeType,
-    BUS_VMIN_IDX, BUS_VMAX_IDX,
-    GEN_PMIN_IDX, GEN_PMAX_IDX, GEN_QMIN_IDX, GEN_QMAX_IDX,
-    AC_LINE_BFR_IDX, AC_LINE_BTO_IDX, AC_LINE_R_IDX, AC_LINE_X_IDX,
-    TR_R_IDX, TR_X_IDX, TR_TAP_IDX, TR_SHIFT_IDX, TR_BFR_IDX, TR_BTO_IDX,
     DEFAULT_INPUT_DIMS,
     _nan_to_zero,
     _leaky_clip,
@@ -25,7 +21,13 @@ from .blocks import (
 from .dc_prior import DCPriorCache, compute_dc_prior
 from .stress_features import compute_physics_stress, STRESS_DIM
 from .hodge_pe import HodgePE
-from .schema import PI_Z2_EPS, PI_TAP_EPS
+from .schema import (
+    AC_LINE_BFR_IDX, AC_LINE_BTO_IDX, AC_LINE_R_IDX, AC_LINE_X_IDX,
+    BUS_VMIN_IDX, BUS_VMAX_IDX,
+    GEN_PMIN_IDX, GEN_PMAX_IDX, GEN_QMIN_IDX, GEN_QMAX_IDX,
+    PI_Z2_EPS, PI_TAP_EPS,
+    TR_R_IDX, TR_X_IDX, TR_TAP_IDX, TR_SHIFT_IDX, TR_BFR_IDX, TR_BTO_IDX,
+)
 
 
 class GridTransformerBackbone(nn.Module):
@@ -58,7 +60,7 @@ class GridTransformerBackbone(nn.Module):
         ffn_mult: int = 4,
         dropout: float = 0.0,
         input_dims: Optional[Dict[str, int]] = None,
-        leaky_alpha: float = 0.02,
+        leaky_alpha: float = 0.0,
         input_norm: bool = True,
         signed_fusion: bool = True,
         hodge_pe_dim: int = 8,

@@ -1,13 +1,11 @@
 """Hodge positional encoding via signed Hodge diffusion."""
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Dict
 
 import torch
 from torch import Tensor, nn
 from torch_geometric.data import HeteroData
-
-from .schema import FORMS as _FORMS
 
 
 def _signed_scatter(
@@ -31,15 +29,13 @@ class HodgePE(nn.Module):
     def __init__(
         self,
         node_feature_dims: Dict[str, int],
-        K: int = 8,
-        T: int = 4,
-        active_forms: Optional[tuple] = None,
+        K: int,
+        T: int,
+        active_forms: tuple,
     ) -> None:
         super().__init__()
         self.K = int(K)
         self.T = int(T)
-        if active_forms is None:
-            active_forms = _FORMS
         self.active_forms = tuple(
             f for f in active_forms if f in node_feature_dims
         )

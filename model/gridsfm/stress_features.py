@@ -25,14 +25,20 @@ from .schema import (
     TR_SHIFT_IDX as _TR_SHIFT,
 )
 
-_FRAC_EPS = 1e-3
-
 _EPS_S2 = 1e-12
+
+# V(3) + KCL_P(3) + KCL_Q(3) + thermal(3) + angle(3) + KVL(3) = 18
+# violation dims (targeted at 0 by the stress regularizer), plus cap(4) +
+# loading_margin(2) = 6 utilization dims (non-violation). `loss.py`
+# imports `STRESS_VIOL_DIMS` rather than hardcoding 18 so reordering the
+# `torch.cat([...])` in `compute_physics_stress` forces this constant to
+# move too.
+STRESS_DIM = 24
+STRESS_VIOL_DIMS = 18
 
 
 def _pool_stats_per_graph(violations: Tensor, batch_idx: Tensor,
-                          n_graphs: int, eps: float = _FRAC_EPS,
-                          ) -> Tensor:
+                          n_graphs: int) -> Tensor:
     if violations.numel() == 0:
         return torch.zeros(n_graphs, 3, dtype=torch.float32, device=violations.device)
     dev = violations.device
@@ -46,7 +52,7 @@ def _pool_stats_per_graph(violations: Tensor, batch_idx: Tensor,
     max_v = torch.full((n_graphs,), NEG, dtype=dtype, device=dev)
     max_v = max_v.scatter_reduce(0, batch_idx, violations, reduce='amax', include_self=True)
     max_v = torch.where(cnt == 0, torch.zeros_like(max_v), max_v)
-    above = (violations > eps).to(dtype)
+    above = (violations > 1e-3).to(dtype)
     sum_above = torch.zeros(n_graphs, dtype=dtype, device=dev)
     sum_above.scatter_add_(0, batch_idx, above)
     frac_v = sum_above / cnt.clamp_min(1.0)
@@ -59,13 +65,11 @@ def compute_physics_stress(
     theta: Tensor,
     Pg: Tensor,
     Qg: Tensor,
+    *,
     ac_flows: Optional[Tensor] = None,
     tr_flows: Optional[Tensor] = None,
-    n_graphs: Optional[int] = None,
+    n_graphs: int,
 ) -> Tensor:
-    if n_graphs is None:
-        n_graphs = int(getattr(data, 'num_graphs', 1) or 1)
-
     bus_x = data['bus'].x
     n_bus = bus_x.size(0)
     dtype = V.dtype
@@ -296,16 +300,16 @@ def compute_physics_stress(
     over_Q = ((sum_Qd_abs_per_g - sum_Qrange_per_g).clamp_min(0.0) / sum_Qrange_per_g.clamp_min(cap_eps)).clamp_max(OUTPUT_CAP)
     cap_stats = torch.stack([util_P, over_P, util_Q, over_Q], dim=-1)
 
-    stress = torch.cat([
-        V_stats,
-        KCL_P_stats,
-        KCL_Q_stats,
-        thermal_stats,
-        angle_stats,
-        KVL_stats,
-        cap_stats,
-        loading_margin_stats,
+    violation = torch.cat([
+        V_stats, KCL_P_stats, KCL_Q_stats,
+        thermal_stats, angle_stats, KVL_stats,
     ], dim=-1)
+    assert violation.size(-1) == STRESS_VIOL_DIMS, (
+        f"violation prefix width {violation.size(-1)} != STRESS_VIOL_DIMS "
+        f"({STRESS_VIOL_DIMS}); the cat layout is what `loss.py` slices "
+        f"`[:, :STRESS_VIOL_DIMS]` against; keep violations leading."
+    )
+    stress = torch.cat([violation, cap_stats, loading_margin_stats], dim=-1)
     assert stress.size(-1) == STRESS_DIM, (
         f"stress feature width {stress.size(-1)} != STRESS_DIM ({STRESS_DIM}); "
         f"update STRESS_DIM if components change."
@@ -313,6 +317,3 @@ def compute_physics_stress(
     return stress
 
 
-# Sum of component widths: V(3) + KCL_P(3) + KCL_Q(3) + thermal(3) + angle(3)
-# + KVL(3) + cap(4) + loading_margin(2).
-STRESS_DIM = 24

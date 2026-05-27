@@ -20,6 +20,7 @@ LOAD_QD_IDX = 1
 SHUNT_BS_IDX = 0
 SHUNT_GS_IDX = 1
 
+AC_LINE_ANGMIN_IDX  = 0
 AC_LINE_ANGMAX_IDX  = 1
 AC_LINE_BFR_IDX     = 2
 AC_LINE_BTO_IDX     = 3
@@ -27,6 +28,7 @@ AC_LINE_R_IDX       = 4
 AC_LINE_X_IDX       = 5
 AC_LINE_RATE_A_IDX  = 6
 
+TR_ANGMIN_IDX       = 0
 TR_ANGMAX_IDX       = 1
 TR_R_IDX            = 2
 TR_X_IDX            = 3
@@ -38,8 +40,6 @@ TR_BTO_IDX          = 10
 
 AC_LINE_KEY     = ("bus", "ac_line",     "bus")
 TRANSFORMER_KEY = ("bus", "transformer", "bus")
-
-FORMS = ("bus", "branch_ac", "branch_tr", "cycle")
 
 REACTANCE_EPS   = 1e-10
 REACTANCE_FLOOR = 1e-4

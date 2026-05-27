@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-from copy import deepcopy
 from pathlib import Path
 from typing import List, Union
 
@@ -39,13 +38,13 @@ _AC_LINE_COLS = 9
 _TRANSFORMER_COLS = 11
 
 
-def _to_tensor(rows, dtype=torch.float32) -> torch.Tensor:
+def _to_tensor(rows) -> torch.Tensor:
     if not rows:
         raise ValueError(
             "_to_tensor called with empty rows; the loader should skip empty "
             "node/edge types instead of producing a zero-width tensor."
         )
-    return torch.tensor(rows, dtype=dtype)
+    return torch.tensor(rows, dtype=torch.float32)
 
 
 def _check_sender_receiver(e: dict, path, et: str) -> None:
@@ -90,6 +89,13 @@ def _fill_missing_node_tensors(d: HeteroData) -> None:
 
 
 def load_pyg_json(path: Union[str, Path]) -> HeteroData:
+    """Load a `.pyg.json` scenario into a HeteroData (no schema validation).
+
+    Reads the GridSFM PyG-flavored JSON: `{grid: {nodes: {bus, generator,
+    load, shunt}, edges: {ac_line, transformer, ...}}}`. Returns a raw
+    HeteroData; the caller is responsible for calling `prepare_for_inference`
+    before the model forward.
+    """
     with open(path) as f:
         try:
             obj = json.load(f)
@@ -112,6 +118,14 @@ def load_pyg_json(path: Union[str, Path]) -> HeteroData:
 
 
 def load_opfdata(path: Union[str, Path]) -> HeteroData:
+    """Load an OPFData JSON scenario into a HeteroData WITH schema validation.
+
+    Same envelope shape as `load_pyg_json` but enforces OPFData's exact
+    column counts on `bus`, `generator`, `ac_line.features`, and
+    `transformer.features`. Use this for the OPFData benchmark format
+    (https://arxiv.org/abs/2406.07234); use `load_pyg_json` for the
+    GridSFM `.pyg.json` variant.
+    """
     with open(path) as f:
         try:
             scn = json.load(f)
@@ -159,6 +173,13 @@ def load_opfdata(path: Union[str, Path]) -> HeteroData:
 
 
 def prepare_for_inference(data: HeteroData) -> HeteroData:
+    """Mutate `data` in place to add cycle-basis + Hodge PE features and
+    fill in any missing canonical node tensors.
+
+    Required before the model forward (HodgePE reads `data['cycle']`).
+    Idempotent: both transforms check for prior application and short-
+    circuit. Returns the same `data` object for chaining.
+    """
     prepare_for_grid_transformer_(data)
     attach_pe_features_(data)
     _fill_missing_node_tensors(data)
@@ -166,8 +187,18 @@ def prepare_for_inference(data: HeteroData) -> HeteroData:
 
 
 def batch_data_list(data_list: List[HeteroData], copy: bool = True) -> Batch:
+    """Collate a list of prepared HeteroData scenarios into a PyG `Batch`.
+
+    Fills missing canonical edge types with empty tensors so a
+    heterogeneous list (e.g. some grids without transformers) still
+    batches cleanly. `copy=True` (default) deep-copies inputs first to
+    avoid mutating caller-held HeteroData.
+    """
     if copy:
-        data_list = [deepcopy(d) for d in data_list]
+        # `.clone()` is ~5000x faster than `copy.deepcopy` on case6470-scale
+        # HeteroData (PyG's tuned per-store tensor-clone vs Python's memo
+        # machinery).
+        data_list = [d.clone() for d in data_list]
     for d in data_list:
         _fill_missing_node_tensors(d)
         for et, ea_dim in _CANONICAL_EDGE_TYPES.items():

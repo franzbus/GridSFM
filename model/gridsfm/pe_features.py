@@ -349,47 +349,44 @@ def attach_pe_features_(
 ) -> HeteroData:
     if getattr(data, _PE_ATTACHED_FLAG, False):
         return data
-    need_bus_pe = True
-    need_ac_pe  = ('branch_ac' in data.node_types and
-                   data['branch_ac'].x.size(0) > 0)
-    need_tr_pe  = ('branch_tr' in data.node_types and
-                   data['branch_tr'].x.size(0) > 0)
+    need_ac_pe = ('branch_ac' in data.node_types and
+                  data['branch_ac'].x.size(0) > 0)
+    need_tr_pe = ('branch_tr' in data.node_types and
+                  data['branch_tr'].x.size(0) > 0)
 
-    if need_bus_pe or need_ac_pe or need_tr_pe:
-        if cache is None:
-            cache = DEFAULT_LAPLACIAN_CACHE
-        state = cache.get_or_build(data)
-        bus_dc, branch_dc = compute_dc_features(data, state)
+    if cache is None:
+        cache = DEFAULT_LAPLACIAN_CACHE
+    state = cache.get_or_build(data)
+    bus_dc, branch_dc = compute_dc_features(data, state)
 
-        if need_bus_pe:
-            er_moments = compute_er_landmark_moments(state)
-            bus_x = data['bus'].x
-            pe_bus = torch.from_numpy(np.concatenate([er_moments, bus_dc], axis=1)
-                                      ).to(dtype=bus_x.dtype, device=bus_x.device)
-            data['bus'].x = torch.cat([bus_x, pe_bus], dim=1)
+    er_moments = compute_er_landmark_moments(state)
+    bus_x = data['bus'].x
+    pe_bus = torch.from_numpy(np.concatenate([er_moments, bus_dc], axis=1)
+                              ).to(dtype=bus_x.dtype, device=bus_x.device)
+    data['bus'].x = torch.cat([bus_x, pe_bus], dim=1)
 
-        if need_ac_pe:
-            ac_dc = branch_dc['ac_line']
-            if ac_dc.shape[0] != int(data['branch_ac'].x.size(0)):
-                raise RuntimeError(
-                    f"branch_ac PE row count {ac_dc.shape[0]} != node count "
-                    f"{int(data['branch_ac'].x.size(0))} — cycle/branch transform "
-                    f"must run BEFORE attach_pe_features_"
-                )
-            bx = data['branch_ac'].x
-            pe_ac = torch.from_numpy(ac_dc).to(dtype=bx.dtype, device=bx.device)
-            data['branch_ac'].x = torch.cat([bx, pe_ac], dim=1)
+    if need_ac_pe:
+        ac_dc = branch_dc['ac_line']
+        if ac_dc.shape[0] != int(data['branch_ac'].x.size(0)):
+            raise RuntimeError(
+                f"branch_ac PE row count {ac_dc.shape[0]} != node count "
+                f"{int(data['branch_ac'].x.size(0))}; cycle/branch transform "
+                f"must run BEFORE attach_pe_features_"
+            )
+        bx = data['branch_ac'].x
+        pe_ac = torch.from_numpy(ac_dc).to(dtype=bx.dtype, device=bx.device)
+        data['branch_ac'].x = torch.cat([bx, pe_ac], dim=1)
 
-        if need_tr_pe:
-            tr_dc = branch_dc['transformer']
-            if tr_dc.shape[0] != int(data['branch_tr'].x.size(0)):
-                raise RuntimeError(
-                    f"branch_tr PE row count {tr_dc.shape[0]} != node count "
-                    f"{int(data['branch_tr'].x.size(0))}"
-                )
-            bx = data['branch_tr'].x
-            pe_tr = torch.from_numpy(tr_dc).to(dtype=bx.dtype, device=bx.device)
-            data['branch_tr'].x = torch.cat([bx, pe_tr], dim=1)
+    if need_tr_pe:
+        tr_dc = branch_dc['transformer']
+        if tr_dc.shape[0] != int(data['branch_tr'].x.size(0)):
+            raise RuntimeError(
+                f"branch_tr PE row count {tr_dc.shape[0]} != node count "
+                f"{int(data['branch_tr'].x.size(0))}"
+            )
+        bx = data['branch_tr'].x
+        pe_tr = torch.from_numpy(tr_dc).to(dtype=bx.dtype, device=bx.device)
+        data['branch_tr'].x = torch.cat([bx, pe_tr], dim=1)
 
     expected_bus_cols = 4 + 5 + 3 + 4
     if int(data['bus'].x.size(1)) < expected_bus_cols:

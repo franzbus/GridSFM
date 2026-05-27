@@ -8,13 +8,7 @@ from torch import Tensor, nn
 from torch_geometric.data import HeteroData
 from torch_geometric.nn import HeteroConv, SAGEConv
 
-from .schema import (
-    BUS_VMIN_IDX, BUS_VMAX_IDX, BUS_TYPE_IDX,
-    GEN_PMIN_IDX, GEN_PMAX_IDX, GEN_QMIN_IDX, GEN_QMAX_IDX,
-    GEN_CP2_IDX, GEN_CP1_IDX, GEN_CP0_IDX,
-    AC_LINE_BFR_IDX, AC_LINE_BTO_IDX, AC_LINE_R_IDX, AC_LINE_X_IDX,
-    TR_R_IDX, TR_X_IDX, TR_TAP_IDX, TR_SHIFT_IDX, TR_BFR_IDX, TR_BTO_IDX,
-)
+from .schema import BUS_TYPE_IDX
 from .signed_incidence import SignedIncidenceConv
 
 EdgeType = Tuple[str, str, str]
@@ -46,7 +40,7 @@ def _nan_to_zero(x: Tensor, sub_value: float = 0.0) -> Tensor:
     return torch.nan_to_num(x, nan=sub_value, posinf=sub_value, neginf=sub_value)
 
 
-def _leaky_clip(u: Tensor, lo: Tensor, hi: Tensor, leak: float = 0.02) -> Tensor:
+def _leaky_clip(u: Tensor, lo: Tensor, hi: Tensor, leak: float = 0.0) -> Tensor:
     return torch.clamp(u, lo, hi) + leak * (
         (u - hi).clamp_min(0.0) - (lo - u).clamp_min(0.0)
     )
@@ -66,14 +60,10 @@ def _scatter_mean(src: Tensor, index: Tensor, dim_size: int) -> Tensor:
     return out
 
 
-def _slack_or_mean_anchor(data: HeteroData, x_bus: Tensor,
-                          n_graphs: Optional[int] = None) -> Tensor:
+def _slack_or_mean_anchor(data: HeteroData, x_bus: Tensor, n_graphs: int) -> Tensor:
     bus_batch = data['bus'].batch
     bus_type = data['bus'].x[:, BUS_TYPE_IDX].long()
     is_slack = (bus_type == 3).to(torch.float32)
-
-    if n_graphs is None:
-        n_graphs = int(bus_batch.max().item()) + 1 if bus_batch.numel() > 0 else 1
     dev = x_bus.device
 
     slack_cnt = torch.zeros(n_graphs, device=dev, dtype=torch.float32)
@@ -105,18 +95,16 @@ def _patch_conv_mask_no_edge_graph(conv: nn.Module) -> nn.Module:
     orig_forward = conv.forward
 
     def masked_forward(x, edge_index, *args, **kwargs):
-        batch_dst = kwargs.pop("batch_dst", None)
-        n_graphs = kwargs.pop("n_graphs", None)
+        # GridBlock.forward always threads batch_dst + n_graphs through
+        # HeteroConv, so kwargs.pop is guaranteed to find them.
+        batch_dst = kwargs.pop("batch_dst")
+        n_graphs = kwargs.pop("n_graphs")
         out = orig_forward(x, edge_index, *args, **kwargs)
         if edge_index.numel() == 0:
             return torch.zeros_like(out)
-        if batch_dst is None:
-            return out
         b_dst = batch_dst[1] if isinstance(batch_dst, (tuple, list)) else batch_dst
         if b_dst is None or b_dst.numel() == 0:
             return out
-        if n_graphs is None:
-            n_graphs = int(b_dst.max().item()) + 1
         graph_has_edge = torch.zeros(n_graphs, dtype=torch.bool, device=out.device)
         graph_has_edge[b_dst[edge_index[1]]] = True
         mask = graph_has_edge[b_dst]
@@ -142,8 +130,7 @@ class LinearSelfAttention(nn.Module):
         nn.init.normal_(self.W_o.weight, mean=0.0, std=0.02)
         self.drop = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
 
-    def forward(self, h: Tensor, batch: Tensor,
-                n_graphs: Optional[int] = None) -> Tensor:
+    def forward(self, h: Tensor, batch: Tensor, n_graphs: int) -> Tensor:
         if h.size(0) == 0:
             return h
         N = h.size(0)
@@ -157,8 +144,6 @@ class LinearSelfAttention(nn.Module):
         Qp = torch.nn.functional.elu(Q) + 1.0
         Kp = torch.nn.functional.elu(K) + 1.0
 
-        if n_graphs is None:
-            n_graphs = int(batch.max().item()) + 1 if batch.numel() > 0 else 1
         dev = h.device
         KV = torch.zeros(n_graphs, H, Dk, Dk, dtype=h.dtype, device=dev)
         K_sum = torch.zeros(n_graphs, H, Dk, dtype=h.dtype, device=dev)
@@ -206,8 +191,6 @@ class GridBlock(nn.Module):
                 conv = SignedIncidenceConv(
                     in_channels=(hidden_dim, hidden_dim),
                     out_channels=hidden_dim,
-                    bias_self=True,
-                    small_init_std=0.02,
                 )
             else:
                 conv = _SAGEConvWithEdgeAttr(
@@ -236,8 +219,8 @@ class GridBlock(nn.Module):
         x_dict: Dict[str, Tensor],
         edge_index_dict: Dict[EdgeType, Tensor],
         batch_dict: Dict[str, Tensor],
-        edge_attr_dict: Optional[Dict[EdgeType, Tensor]] = None,
-        n_graphs: Optional[int] = None,
+        edge_attr_dict: Optional[Dict[EdgeType, Tensor]],
+        n_graphs: int,
     ) -> Dict[str, Tensor]:
         x_dict = {
             nt: (x + self.attn[nt](self.attn_ln[nt](x), batch_dict[nt], n_graphs)
@@ -248,7 +231,7 @@ class GridBlock(nn.Module):
         x_pre = {nt: self.gnn_ln[nt](x) for nt, x in x_dict.items() if nt in self.gnn_ln}
         if edge_attr_dict is None:
             edge_attr_dict = {}
-        n_graphs_dict = {et: n_graphs for et in edge_index_dict} if n_graphs is not None else {}
+        n_graphs_dict = {et: n_graphs for et in edge_index_dict}
         x_msg = self.gnn(x_pre, edge_index_dict,
                          edge_attr_dict=edge_attr_dict,
                          batch_dst_dict=batch_dict,
@@ -268,7 +251,7 @@ class GridBlock(nn.Module):
 
 class FusionLayer(nn.Module):
     """Fuse per-type embeddings into (h_grid_bus, h_grid_gen, h_grid_global)."""
-    def __init__(self, hidden_dim: int, signed_fusion: bool = True):
+    def __init__(self, hidden_dim: int, signed_fusion: bool):
         super().__init__()
         d = hidden_dim
         self.signed_fusion = bool(signed_fusion)
@@ -291,14 +274,14 @@ class FusionLayer(nn.Module):
         nn.init.normal_(self.W_g_from_b.weight, mean=0.0, std=0.02)
         self.gen_ln = nn.LayerNorm(d)
 
-        self.W_global = nn.Linear(4 * d, d)
+        self.W_global = nn.Linear(8 * d, d)
         self.global_ln = nn.LayerNorm(d)
 
     def forward(
         self,
         h: Dict[str, Tensor],
         data: HeteroData,
-        n_graphs: Optional[int] = None,
+        n_graphs: int,
     ) -> Tuple[Tensor, Tensor, Tensor]:
         h_bus = h['bus']
         n_bus = h_bus.size(0)
@@ -387,26 +370,39 @@ class FusionLayer(nn.Module):
             h_grid_gen = self.gen_ln(self.W_g_self(h_grid_gen))
 
         bus_batch = data['bus'].batch
-        if n_graphs is None:
-            n_graphs = int(bus_batch.max().item()) + 1 if bus_batch.numel() > 0 else 1
 
         def _pool_per_type(h_src, batch_src):
+            """Return (mean, max) per graph; both [n_graphs, d]. Empty-group
+            max rows are clamped to 0 to match the all-zero-input contract."""
             if h_src.size(0) == 0:
-                return torch.zeros(n_graphs, d, dtype=h_bus.dtype, device=dev)
-            return _scatter_mean(h_src, batch_src, n_graphs)
+                z = torch.zeros(n_graphs, d, dtype=h_bus.dtype, device=dev)
+                return z, z
+            mean = _scatter_mean(h_src, batch_src, n_graphs)
+            mx = torch.full((n_graphs, d), float('-inf'),
+                            dtype=h_src.dtype, device=dev).scatter_reduce(
+                                0, batch_src.unsqueeze(-1).expand(-1, d),
+                                h_src, reduce='amax', include_self=True)
+            mx = mx.masked_fill(mx == float('-inf'), 0.0)
+            return mean, mx
 
-        pool_bus = _pool_per_type(h_grid_bus, bus_batch)
-        pool_ac  = _pool_per_type(h.get('branch_ac', torch.zeros(0, d, device=dev)),
-                                  data['branch_ac'].batch if 'branch_ac' in data.node_types and data['branch_ac'].x.size(0)>0
-                                                       else torch.zeros(0, dtype=torch.long, device=dev))
-        pool_tr  = _pool_per_type(h.get('branch_tr', torch.zeros(0, d, device=dev)),
-                                  data['branch_tr'].batch if 'branch_tr' in data.node_types and data['branch_tr'].x.size(0)>0
-                                                            else torch.zeros(0, dtype=torch.long, device=dev))
-        pool_cyc = _pool_per_type(h.get('cycle', torch.zeros(0, d, device=dev)),
-                                  data['cycle'].batch if 'cycle' in data.node_types and data['cycle'].x.size(0)>0
-                                                      else torch.zeros(0, dtype=torch.long, device=dev))
+        empty_h = torch.zeros(0, d, device=dev)
+        empty_b = torch.zeros(0, dtype=torch.long, device=dev)
+
+        def _hb(nt):
+            present = nt in data.node_types and data[nt].x.size(0) > 0
+            return ((h.get(nt, empty_h), data[nt].batch) if present
+                    else (empty_h, empty_b))
+
+        # Per-type (mean, max) pooled to a single d-vector each; concat
+        # interleaved as 8*d for W_global. Layout drives the cross-version
+        # adapter; keep mean/max paired per type.
+        mean_bus, max_bus = _pool_per_type(h_grid_bus, bus_batch)
+        mean_ac,  max_ac  = _pool_per_type(*_hb('branch_ac'))
+        mean_tr,  max_tr  = _pool_per_type(*_hb('branch_tr'))
+        mean_cyc, max_cyc = _pool_per_type(*_hb('cycle'))
         h_grid_global = self.global_ln(self.W_global(
-            torch.cat([pool_bus, pool_ac, pool_tr, pool_cyc], dim=-1)
+            torch.cat([mean_bus, max_bus, mean_ac, max_ac,
+                       mean_tr, max_tr, mean_cyc, max_cyc], dim=-1)
         ))
 
         return h_grid_bus, h_grid_gen, h_grid_global
