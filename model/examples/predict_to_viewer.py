@@ -64,23 +64,19 @@ def build_viewer_json(pred: dict, sample_obj: dict, t_solve: float) -> dict:
     branch_sol = {}
     Pij = pred["Pij"].tolist(); Qij = pred["Qij"].tolist()
     Pji = pred["Pji"].tolist(); Qji = pred["Qji"].tolist()
-    counts = list(pred.get("flow_edge_counts", []) or [])
-    types  = list(pred.get("flow_edge_types",  []) or [])
+    counts = list(pred["flow_edge_counts"])
+    types  = list(pred["flow_edge_types"])
     ID_BY_TYPE = {"ac_line": list(ac_ids), "transformer": list(tr_ids)}
     EXPECTED   = {"ac_line": n_ac, "transformer": n_tr}
-    if types and counts:
-        if len(types) != len(counts):
-            raise ValueError(f"flow_edge_types={types} length differs from flow_edge_counts={counts}")
-        all_ids = []
-        for t, c in zip(types, counts):
-            if t not in ID_BY_TYPE:
-                raise ValueError(f"Unknown flow_edge_type {t!r}; sample metadata has ac_line+transformer only")
-            if c != EXPECTED[t]:
-                raise ValueError(f"flow_edge_counts[{t}]={c} does not match metadata ({EXPECTED[t]})")
-            all_ids.extend(ID_BY_TYPE[t])
-    else:
-        # legacy / minimal predict output: assume canonical ac_line then transformer
-        all_ids = list(ac_ids) + list(tr_ids)
+    if len(types) != len(counts):
+        raise ValueError(f"flow_edge_types={types} length differs from flow_edge_counts={counts}")
+    all_ids = []
+    for t, c in zip(types, counts):
+        if t not in ID_BY_TYPE:
+            raise ValueError(f"Unknown flow_edge_type {t!r}; sample metadata has ac_line+transformer only")
+        if c != EXPECTED[t]:
+            raise ValueError(f"flow_edge_counts[{t}]={c} does not match metadata ({EXPECTED[t]})")
+        all_ids.extend(ID_BY_TYPE[t])
     if len(all_ids) != len(Pij):
         raise ValueError(f"Flow count mismatch: {len(all_ids)} branch ids vs {len(Pij)} predicted flows")
     for i, pm_id in enumerate(all_ids):
@@ -96,7 +92,7 @@ def build_viewer_json(pred: dict, sample_obj: dict, t_solve: float) -> dict:
 
     return {
         "formulation": "gridsfm",
-        "relaxation_name": "GridSFM-Open v1.0",
+        "relaxation_name": "GridSFM-Open v1.1",
         "relaxation_label": "ML",
         "relaxation_level": -1,
         "termination_status": "ML_PREDICTION",
@@ -128,7 +124,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sample", required=True, type=Path)
     ap.add_argument("--out",    required=True, type=Path)
-    ap.add_argument("--ckpt",   default=str(ROOT / "checkpoints" / "gridsfm_open_v1.0.pt"))
+    ap.add_argument("--ckpt",   default=str(ROOT / "checkpoints" / "gridsfm_open_v1.1.pt"))
     ap.add_argument("--gpu",    type=int, default=-1)
     args = ap.parse_args()
 

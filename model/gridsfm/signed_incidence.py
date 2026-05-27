@@ -10,21 +10,20 @@ from torch_geometric.nn import MessagePassing
 class SignedIncidenceConv(MessagePassing):
     """Signed bipartite message passing with mean aggregation (see module docstring)."""
 
+    _SMALL_INIT_STD = 0.02
+
     def __init__(
         self,
         in_channels: Union[int, Tuple[int, int]],
         out_channels: int,
-        bias_self: bool = True,
-        small_init_std: float = 0.02,
     ):
         super().__init__(aggr='mean', flow='source_to_target', node_dim=0)
         if isinstance(in_channels, int):
             in_channels = (in_channels, in_channels)
         self.in_channels = in_channels
         self.out_channels = int(out_channels)
-        self.small_init_std = float(small_init_std)
         self.lin_msg  = nn.Linear(in_channels[0], out_channels, bias=False)
-        self.lin_self = nn.Linear(in_channels[1], out_channels, bias=bias_self)
+        self.lin_self = nn.Linear(in_channels[1], out_channels, bias=True)
         self.reset_parameters()
 
     def forward(
@@ -51,8 +50,8 @@ class SignedIncidenceConv(MessagePassing):
         return x_j * sign
 
     def reset_parameters(self):
-        nn.init.normal_(self.lin_msg.weight,  mean=0.0, std=self.small_init_std)
-        nn.init.normal_(self.lin_self.weight, mean=0.0, std=self.small_init_std)
+        nn.init.normal_(self.lin_msg.weight,  mean=0.0, std=self._SMALL_INIT_STD)
+        nn.init.normal_(self.lin_self.weight, mean=0.0, std=self._SMALL_INIT_STD)
         if self.lin_self.bias is not None:
             nn.init.zeros_(self.lin_self.bias)
 

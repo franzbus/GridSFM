@@ -1,7 +1,7 @@
 """DC power-flow prior for θ and branch-P (cached per topology)."""
 from __future__ import annotations
 import hashlib
-from typing import Dict
+from typing import Dict, Optional
 import torch
 from torch import Tensor
 import numpy as np
@@ -42,8 +42,14 @@ class DCPriorCache:
         return h.hexdigest()
 
     def get_or_build(self, n_bus: int, ei_cpu: Tensor,
-                     b_ij: np.ndarray, slack_idx: int) -> object:
-        key = self.topo_key(n_bus, ei_cpu, b_ij, slack_idx)
+                     b_ij: np.ndarray, slack_idx: int,
+                     key: Optional[str] = None) -> object:
+        # Compute the key here when not supplied. Callers that already
+        # need the key (e.g. for a per-topology grouping dict) can pass
+        # it to skip the second sha1; otherwise the API is safe by
+        # default and cannot be silently poisoned with a stale key.
+        if key is None:
+            key = self.topo_key(n_bus, ei_cpu, b_ij, slack_idx)
         with self._lock:
             if key in self._cache:
                 self._cache.move_to_end(key)
@@ -89,8 +95,7 @@ def compute_dc_prior(
     device = genP_pred.device
     dtype = genP_pred.dtype
     Nb = data['bus'].x.size(0)
-    bb = getattr(data['bus'], 'batch', None)
-    bus_batch = bb.cpu() if bb is not None else torch.zeros(Nb, dtype=torch.long)
+    bus_batch = data['bus'].batch.cpu()
     G = int(bus_batch.max().item()) + 1 if bus_batch.numel() > 0 else 1
 
     P_inject = torch.zeros(Nb, dtype=torch.float64)
@@ -204,15 +209,13 @@ def compute_dc_prior(
 
         ei_local = torch.stack([torch.from_numpy(e_i), torch.from_numpy(e_j)])
         gkey = cache.topo_key(n_bus_g, ei_local, e_b, slack_local)
-
-        solve_data = cache.get_or_build(n_bus_g, ei_local, e_b, slack_local)
-        solve_fn, mask, _ = solve_data
+        solve_fn, mask, _ = cache.get_or_build(
+            n_bus_g, ei_local, e_b, slack_local, key=gkey)
 
         P_red = P_g[mask]
         slot = {
-            'g': g, 'bus_idx': bus_idx, 'mask': mask, 'P_g': P_g,
-            'slack_local': slack_local, 'n_bus_g': n_bus_g,
-            'edge_count': int(edge_mask.sum()), 'P_red': P_red,
+            'bus_idx': bus_idx, 'mask': mask,
+            'n_bus_g': n_bus_g, 'P_red': P_red,
             'theta_red': None,
         }
         pending.append(slot)
@@ -231,16 +234,10 @@ def compute_dc_prior(
 
     for s in pending:
         theta_red = s['theta_red']
-        bus_idx = s['bus_idx']
-        n_bus_g = s['n_bus_g']
-        mask = s['mask']
-
-        n_nonfinite = int(np.sum(~np.isfinite(theta_red)))
-        if n_nonfinite > 0:
+        if not np.isfinite(theta_red).all():
             theta_red = np.where(np.isfinite(theta_red), theta_red, 0.0)
-
-        theta_g = np.zeros(n_bus_g, dtype=np.float64)
-        theta_g[mask] = theta_red
-        theta_dc_all[bus_idx] = theta_g
+        theta_g = np.zeros(s['n_bus_g'], dtype=np.float64)
+        theta_g[s['mask']] = theta_red
+        theta_dc_all[s['bus_idx']] = theta_g
 
     return torch.from_numpy(theta_dc_all).to(device=device, dtype=dtype).detach()

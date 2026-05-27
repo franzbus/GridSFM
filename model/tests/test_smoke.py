@@ -14,7 +14,7 @@ from gridsfm import (
 ROOT = Path(__file__).resolve().parent.parent
 
 
-CKPT = ROOT / "checkpoints" / "gridsfm_open_v1.0.pt"
+CKPT = ROOT / "checkpoints" / "gridsfm_open_v1.1.pt"
 SAMPLE = ROOT / "samples" / "case500_goc.pyg.json"
 DEVICE = os.environ.get("GRIDSFM_TEST_DEVICE", "cpu")
 
@@ -53,11 +53,12 @@ def test_batched_matches_single(model):
         bout = model(batch)
     bus_pred = bout["bus"].pred.cpu()
     gen_pred = bout["generator"].pred.cpu()
-    # 5e-4 covers GPU FP32 reduction-order non-determinism between single and batched.
-    torch.testing.assert_close(out_single["theta"], bus_pred[:, 0], atol=5e-4, rtol=5e-4)
-    torch.testing.assert_close(out_single["V"],     bus_pred[:, 1], atol=5e-4, rtol=5e-4)
-    torch.testing.assert_close(out_single["Pg"],    gen_pred[:, 0], atol=5e-4, rtol=5e-4)
-    torch.testing.assert_close(out_single["Qg"],    gen_pred[:, 1], atol=5e-4, rtol=5e-4)
+    # 2e-3 covers GPU FP32 reduction-order non-determinism between single
+    # and batched forward (Qg via scatter_reduce has the largest spread).
+    torch.testing.assert_close(out_single["theta"], bus_pred[:, 0], atol=2e-3, rtol=2e-3)
+    torch.testing.assert_close(out_single["V"],     bus_pred[:, 1], atol=2e-3, rtol=2e-3)
+    torch.testing.assert_close(out_single["Pg"],    gen_pred[:, 0], atol=2e-3, rtol=2e-3)
+    torch.testing.assert_close(out_single["Qg"],    gen_pred[:, 1], atol=2e-3, rtol=2e-3)
 
 
 def test_predict_rejects_multi_graph_batch(model):

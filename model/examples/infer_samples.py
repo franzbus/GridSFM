@@ -105,7 +105,7 @@ def per_case_metrics(pred: Dict[str, Any], gt: Dict[str, Any]) -> Dict[str, Any]
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("ckpt_path", nargs="?",
-                    default=str(ROOT / "checkpoints" / "gridsfm_open_v1.0.pt"))
+                    default=str(ROOT / "checkpoints" / "gridsfm_open_v1.1.pt"))
     ap.add_argument("--gpu", type=int, default=-1, help="GPU index (-1 = CPU).")
     args = ap.parse_args()
 
@@ -118,7 +118,7 @@ def main():
     if not ckpt_path.exists():
         sys.exit(
             f"Checkpoint not found at {ckpt_path}. Download with:\n"
-            f"  hf download microsoft/GridSFM_Open gridsfm_open_v1.0.pt "
+            f"  hf download microsoft/GridSFM_Open gridsfm_open_v1.1.pt "
             f"--local-dir {ROOT / 'checkpoints'}"
         )
 

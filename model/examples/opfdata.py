@@ -39,7 +39,7 @@ def main():
                     help="cap on scenarios processed (default: all in split)")
     ap.add_argument("--num-groups", type=int, default=1,
                     help="OPFDataset num_groups (1..20); cache dir is processed_<N>")
-    ap.add_argument("--ckpt", default=str(ROOT / "checkpoints" / "gridsfm_open_v1.0.pt"))
+    ap.add_argument("--ckpt", default=str(ROOT / "checkpoints" / "gridsfm_open_v1.1.pt"))
     ap.add_argument("--gpu", type=int, default=-1, help="GPU index (-1 = CPU)")
     args = ap.parse_args()
 
@@ -47,7 +47,7 @@ def main():
     if not ckpt.exists():
         sys.exit(
             f"Checkpoint not found at {ckpt}. Download with:\n"
-            f"  hf download microsoft/GridSFM_Open gridsfm_open_v1.0.pt "
+            f"  hf download microsoft/GridSFM_Open gridsfm_open_v1.1.pt "
             f"--local-dir {ROOT / 'checkpoints'}"
         )
 

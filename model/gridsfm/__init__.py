@@ -1,25 +1,29 @@
-"""GridSFM AC-OPF inference package."""
+"""GridSFM AC-OPF inference + fine-tuning package."""
 from __future__ import annotations
 
-from copy import deepcopy
 from pathlib import Path
-from typing import Dict, Union
+from typing import Any, Dict, Union
 
 import torch
 from torch_geometric.data import HeteroData
 
 from . import schema
-from .checkpoint import load_model, load_from_hf
+from .checkpoint import load_from_hf, load_model
 from .data import (
     batch_data_list,
-    load_pyg_json,
     load_opfdata,
+    load_pyg_json,
     prepare_for_inference,
 )
+from .eval import eval_pass
+from .finetune_opfdata import finetune_opfdata
+from .loss import compute_loss
 from .model import GridTransformerBackbone
+from .opfdata_train import OPFDataAdapterDataset
 from .schema import AC_LINE_KEY, TRANSFORMER_KEY
+from .synthetic import SyntheticMixedDataset
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 
 @torch.no_grad()
@@ -27,9 +31,24 @@ def predict(
     model: GridTransformerBackbone,
     scenario: Union[str, Path, HeteroData],
     fmt: str = "auto",
-) -> Dict[str, torch.Tensor]:
+) -> Dict[str, Any]:
+    """Run single-graph inference and return CPU tensors + scalars.
+
+    Args:
+      model: a loaded `GridTransformerBackbone`.
+      scenario: a `.pyg.json` / `.json` path, or a `HeteroData` already
+        in the package's schema. The latter is `.clone()`'d before any
+        in-place mutation by `prepare_for_inference`.
+      fmt: `"auto"` (default), `"pyg"`, or `"opfdata"`. Auto detection
+        chooses `pyg` for `*.pyg.json`, otherwise `opfdata`.
+
+    Returns a dict with `theta`, `V`, `Pg`, `Qg` (per-node CPU tensors),
+    branch flows `Pij` / `Qij` / `Pji` / `Qji` concatenated across edge
+    families (`flow_edge_types` + `flow_edge_counts` document the
+    layout), and feasibility outputs (`feas`, `feas_logit`).
+    """
     if isinstance(scenario, HeteroData):
-        data = deepcopy(scenario)
+        data = scenario.clone()
     else:
         path = Path(scenario)
         if fmt == "auto":
@@ -52,36 +71,29 @@ def predict(
 
     device = next(model.parameters()).device
     data = data.to(device)
-    if not hasattr(data["bus"], "batch"):
-        data["bus"].batch = torch.zeros(data["bus"].x.size(0), dtype=torch.long, device=device)
-    for nt in GridTransformerBackbone.NODE_TYPES:
-        if nt == "bus":
-            continue
-        if nt in data.node_types and not hasattr(data[nt], "batch"):
-            data[nt].batch = torch.zeros(data[nt].x.size(0), dtype=torch.long, device=device)
-    n_graphs = int(getattr(data, "num_graphs", 1) or 1)
-    if n_graphs > 1:
+    if int(getattr(data, "num_graphs", 1) or 1) > 1:
         raise ValueError(
             "predict() handles a single scenario; for multi-graph batches use "
             "batch_data_list(prepared) and call model(batch) directly."
         )
-    data.num_graphs = 1
 
+    # model.forward attaches default per-node-type `batch` and reads
+    # `num_graphs` itself; no need to pre-populate them here.
     out = model(data)
 
     bus_pred = out["bus"].pred
     gen_pred = out["generator"].pred
-    flows = []
+    flow_tensors: list[torch.Tensor] = []
     flow_edge_types: list[str] = []
     flow_edge_counts: list[int] = []
     for k in (AC_LINE_KEY, TRANSFORMER_KEY):
         if k in out.edge_types and hasattr(out[k], "edge_flow_pred"):
             e = out[k].edge_flow_pred
-            flows.append(e)
+            flow_tensors.append(e)
             flow_edge_types.append(k[1])
             flow_edge_counts.append(int(e.size(0)))
-    if flows:
-        flows = torch.cat(flows, dim=0)
+    if flow_tensors:
+        flows = torch.cat(flow_tensors, dim=0)
     else:
         flows = torch.zeros(0, 4, device=device, dtype=bus_pred.dtype)
 
@@ -103,6 +115,7 @@ def predict(
 
 
 __all__ = [
+    # Inference
     "GridTransformerBackbone",
     "batch_data_list",
     "load_model",
@@ -112,5 +125,15 @@ __all__ = [
     "prepare_for_inference",
     "predict",
     "schema",
+    # Edge-type schema keys (used by callers wiring batched flows back to
+    # per-edge-type IDs; see `predict()` body for the canonical pattern).
+    "AC_LINE_KEY",
+    "TRANSFORMER_KEY",
+    # Fine-tuning (OPFData format only)
+    "compute_loss",
+    "eval_pass",
+    "finetune_opfdata",
+    "OPFDataAdapterDataset",
+    "SyntheticMixedDataset",
     "__version__",
 ]
