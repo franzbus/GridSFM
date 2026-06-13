@@ -1,0 +1,33 @@
+{
+  "timestamp": "2026-06-13T10:21:31.843022Z",
+  "grid_file": "samples/case1354_pegase.pyg.json",
+  "isolated_line": {
+    "global_idx": 626,
+    "family": "ac_line",
+    "from_bus": 632,
+    "to_bus": 1019
+  },
+  "status": "CONGESTED",
+  "baseline_loading_pu": 4.438258,
+  "rate_a_pu": 2.81,
+  "mitigation": {
+    "case": "C",
+    "action": "PEAKER_DISPATCH",
+    "economically_viable": false,
+    "batteries_curtailed": 3,
+    "min_battery_subset": [
+      161,
+      448,
+      320
+    ],
+    "min_curtailment_mw": 416.16,
+    "predicted_loading_after": 5.420922,
+    "overload_cleared_pct": -60.4,
+    "impact_factor": -0.236127
+  },
+  "economics": {
+    "redispatch_cost_usd": 24423.86,
+    "battery_compensation_usd": 8323.2,
+    "estimated_savings_usd": 16100.66
+  }
+}
