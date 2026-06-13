@@ -417,3 +417,12 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# macOS
+.DS_Store
+
+# Dashboard temp files
+model/_tmp_dashboard/
+
+# Local venv
+model/.venv/
