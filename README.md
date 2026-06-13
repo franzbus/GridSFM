@@ -1,4 +1,68 @@
-# GridSFM
+# GridSFM — with Congestion Mitigation Dashboard
+
+> **This fork adds an interactive web dashboard** for grid congestion analysis on top of the original [microsoft/GridSFM](https://github.com/microsoft/GridSFM) repo.  
+> Jump to [Running the Dashboard](#running-the-dashboard) to get started quickly.
+
+---
+
+## Running the Dashboard
+
+The dashboard runs the full congestion mitigation pipeline — baseline prediction, battery shutdown scenario, and analysis report — interactively in the browser.
+
+### 1. Clone and set up the environment
+
+```bash
+git clone https://github.com/franzbus/GridSFM.git
+cd GridSFM/model
+
+python -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -e .                   # installs the gridsfm package
+pip install -r requirements.txt    # installs Flask and all other deps
+```
+
+### 2. Download the model checkpoint
+
+The checkpoint is hosted on Hugging Face. Download it once:
+
+```python
+from gridsfm import load_from_hf
+load_from_hf("microsoft/GridSFM_Open")   # saves to model/checkpoints/
+```
+
+Or manually download `gridsfm_open_v1.1.pt` from  
+https://huggingface.co/microsoft/GridSFM_Open and place it in `model/checkpoints/`.
+
+### 3. Run the dashboard
+
+```bash
+cd model
+python dashboard.py
+```
+
+Then open **http://localhost:5050** in your browser.
+
+### 4. How to use it
+
+1. **Select a sample** from the left panel (53 grids available — US state grids and standard case studies).
+2. Click **Run Analysis**. A popup opens and results appear sequentially:
+   - **Step 1 — Baseline prediction**: full network thermal loading map + zoom on the worst congested line.
+   - **Step 2 — Battery shutdown**: charging batteries near the congested line are curtailed, the model re-predicts, and updated maps are shown.
+   - **Step 3 — Mitigation report**: key metrics (loading before/after, cost comparison, savings) and a Case A/B/C verdict.
+3. Scroll down inside the popup to view all maps at full resolution.
+
+### Dashboard file
+
+| File | Description |
+|---|---|
+| `model/dashboard.py` | Flask app — all analysis logic and the web UI |
+| `model/test_5.py` | Standalone script version of the same pipeline |
+| `model/samples/` | 53 `.pyg.json` grid scenarios ready to run |
+| `model/checkpoints/` | Model checkpoint (download separately, see above) |
+
+---
+
+## Original GridSFM
 
 GridSFM is an open-source framework for AC Optimal Power Flow (AC-OPF),
 the optimization that determines the cost-minimizing generator dispatch
